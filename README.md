@@ -1,21 +1,21 @@
-# BlockPass 🎟️🔒
+# BlockPass 
 > Decentralized Anti-Scalping Ticketing Portal
 
 BlockPass is a decentralized application (dApp) designed to combat ticket scalping on the blockchain. By leveraging smart contracts, unique cryptographic ownership, and role-based access control, it ensures fair pricing and secure ticket distribution.
 
-## 🚀 Features
+## Features
 * **Anti-Scalping Protection:** Enforces transparent, contract-controlled ticket purchasing and ownership limits.
 * **Role-Based Workflows:** Separates administrative controls (event listing creation, price management) from buyer capabilities.
 * **MetaMask Integration:** Secure Web3 wallet connection for local blockchain transactions.
 * **Local Testnet Ready:** Integrated with Ganache and Truffle for rapid local development and testing.
 
-## 🛠️ Tech Stack
+## Tech Stack
 * **Smart Contracts:** Solidity
 * **Development & Migration:** Truffle, Ganache
 * **Frontend:** HTML5, CSS3, JavaScript (Vanilla), Web3.js
 * **Wallet Provider:** MetaMask
 
-## ⚙️ Getting Started Locally
+## Getting Started Locally
 
 ### Prerequisites
 Make sure you have the following installed:
