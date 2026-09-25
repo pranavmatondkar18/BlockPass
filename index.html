@@ -78,14 +78,36 @@
         <button onclick="connectWallet()">Connect MetaMask</button>
     </div>
 
-    <!-- Purchase Section -->
-    <div class="card">
+    <!-- Purchase Section (Hidden by default until buyer role is verified) -->
+    <div id="buyerPanel" class="card" style="display: none;">
         <h3>Buy Ticket</h3>
         <label for="listingId">Listing ID:</label>
         <input type="number" id="listingId" placeholder="e.g. 1" value="1">
         
         <p style="font-size: 14px; color: #555;">Price: <strong>0.01 ETH / MATIC</strong></p>
         <button onclick="buyTicket()">Secure Ticket On-Chain</button>
+    </div>
+
+    <!-- Seller / Admin Panel (Hidden by default until admin role is verified) -->
+    <div id="sellerPanel" class="card" style="display: none;">
+        <h3>Create Event Listing (Seller/Admin)</h3>
+
+        <div class="form-group">
+            <label for="ticketPrice">Price (ETH):</label>
+            <input type="text" id="ticketPrice" placeholder="e.g. 0.01">
+        </div>
+
+        <div class="form-group">
+            <label for="ticketSupply">Total Supply:</label>
+            <input type="number" id="ticketSupply" placeholder="e.g. 100">
+        </div>
+
+        <div class="form-group">
+            <label for="ticketLiveTime">Live Time / Duration (Seconds):</label>
+            <input type="number" id="ticketLiveTime" placeholder="e.g. 86400">
+        </div>
+
+        <button id="createListingBtn" class="btn" onclick="createListing()">Create Listing On-Chain</button>
     </div>
 
     <!-- Web3.js CDN -->
