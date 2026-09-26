@@ -94,7 +94,9 @@ contract TicketSystem {
         ticket.isResold = true;
         ticket.owner = address(this); // Held back by contract for secondary marketplace
 
-        payable(msg.sender).transfer(refundAmount);
+        (bool sent, ) = payable(msg.sender).call{value: refundAmount}("");
+        require(sent, "ETH transfer failed");
+        
         emit TicketRefunded(tokenId, msg.sender, refundAmount);
     }
 

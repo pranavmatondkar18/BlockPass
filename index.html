@@ -9,60 +9,62 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
             background-color: #f4f7f6;
             color: #333;
-            max-width: 600px;
-            margin: 50px auto;
+            max-width: 650px;
+            margin: 40px auto;
             padding: 20px;
             border-radius: 10px;
             box-shadow: 0 4px 10px rgba(0,0,0,0.1);
             background: #fff;
         }
-        h1 {
-            color: #2c3e50;
-            text-align: center;
-        }
-        p.subtitle {
-            text-align: center;
-            color: #7f8c8d;
-            margin-bottom: 30px;
-        }
+        h1 { color: #2c3e50; text-align: center; margin-bottom: 4px; }
+        p.subtitle { text-align: center; color: #7f8c8d; margin-bottom: 25px; }
         .card {
             background: #f8f9fa;
-            padding: 20px;
+            padding: 18px;
             border-radius: 8px;
-            margin-bottom: 20px;
+            margin-bottom: 18px;
             border: 1px solid #e9ecef;
         }
-        button {
+        button, .btn {
             background-color: #3498db;
             color: white;
             border: none;
             padding: 10px 15px;
-            font-size: 16px;
+            font-size: 15px;
             border-radius: 5px;
             cursor: pointer;
             width: 100%;
-            margin-top: 10px;
-            transition: background 0.3s;
+            margin-top: 8px;
+            transition: background 0.2s;
         }
-        button:hover {
-            background-color: #2980b9;
-        }
+        button:hover, .btn:hover { background-color: #2980b9; }
+        button:disabled { background-color: #bdc3c7; cursor: not-allowed; }
         input {
             width: 100%;
-            padding: 10px;
+            padding: 9px;
             margin-top: 5px;
-            margin-bottom: 15px;
+            margin-bottom: 12px;
             border: 1px solid #ccc;
             border-radius: 5px;
             box-sizing: border-box;
         }
-        label {
-            font-weight: bold;
-            color: #34495e;
+        label { font-weight: bold; color: #34495e; font-size: 14px; }
+        #status { font-weight: bold; color: #e67e22; word-break: break-all; }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            justify-content: center;
+            align-items: center;
         }
-        #status {
-            font-weight: bold;
-            color: #e67e22;
+        .modal-content {
+            background: white;
+            padding: 25px;
+            border-radius: 8px;
+            text-align: center;
+            max-width: 320px;
+            margin: auto;
         }
     </style>
 </head>
@@ -75,20 +77,40 @@
     <div class="card">
         <h3>Wallet Status</h3>
         <p>Current State: <span id="status">Disconnected</span></p>
-        <button onclick="connectWallet()">Connect MetaMask</button>
+        <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
     </div>
 
-    <!-- Purchase Section (Hidden by default until buyer role is verified) -->
+    <!-- BUYER Section -->
     <div id="buyerPanel" class="card" style="display: none;">
-        <h3>Buy Ticket</h3>
-        <label for="listingId">Listing ID:</label>
-        <input type="number" id="listingId" placeholder="e.g. 1" value="1">
+        <!-- INVENTORY DISPLAY -->
+        <div id="inventoryPanel" class="card">
+            <h3>My Ticket Inventory</h3>
+            <button class="btn" onclick="loadUserInventory()">Refresh My Tickets</button>
+            <div id="inventoryContainer" style="margin-top: 15px;">
+                <p>Connect wallet to view your tickets.</p>
+            </div>
+        </div>
+
+        <!-- RESALE MARKET -->
+        <div id="resellPanel" class="card">
+            <h3>Secondary Market (10% Discount)</h3>
+            <button id="refreshResellBtn" class="btn" onclick="loadResellListings()">Refresh Resale Listings</button>
+            <div id="resellContainer" style="margin-top: 15px;">
+                <p>No resold tickets currently available.</p>
+            </div>
+        </div>
         
-        <p style="font-size: 14px; color: #555;">Price: <strong>0.01 ETH / MATIC</strong></p>
-        <button onclick="buyTicket()">Secure Ticket On-Chain</button>
+        <!-- PRIMARY LISTINGS -->
+        <div class="card">
+            <h3>Active Primary Listings</h3>
+            <button class="btn" onclick="loadListings()">Refresh Listings</button>
+            <div id="listingsContainer" style="margin-top: 15px;">
+                <p>Loading listings...</p>
+            </div>
+        </div>
     </div>
 
-    <!-- Seller / Admin Panel (Hidden by default until admin role is verified) -->
+    <!-- Seller / Admin Panel -->
     <div id="sellerPanel" class="card" style="display: none;">
         <h3>Create Event Listing (Seller/Admin)</h3>
 
@@ -103,16 +125,33 @@
         </div>
 
         <div class="form-group">
-            <label for="ticketLiveTime">Live Time / Duration (Seconds):</label>
-            <input type="number" id="ticketLiveTime" placeholder="e.g. 86400">
+            <label for="ticketLiveTime">Live Time (Unix Timestamp or offset in seconds):</label>
+            <input type="number" id="ticketLiveTime" placeholder="e.g. 0 for immediate release">
         </div>
 
         <button id="createListingBtn" class="btn" onclick="createListing()">Create Listing On-Chain</button>
+
+        <div class="card" style="margin-top: 20px;">
+            <h3>Active Event Listings</h3>
+            <button class="btn" onclick="loadListings()">Refresh Listings</button>
+            <div id="sellerListingsContainer" style="margin-top: 15px;">
+                <p>Loading listings...</p>
+            </div>
+        </div>
     </div>
 
-    <!-- Web3.js CDN -->
+    <!-- Dynamic Entry Modal (OTP / Gate Verification) -->
+    <div id="otpModal" class="modal">
+        <div class="modal-content">
+            <h3>Venue Entry Pass</h3>
+            <p id="modalTokenText">Token #</p>
+            <h1 id="otpDisplay" style="letter-spacing: 4px; color: #27ae60; font-size: 38px; margin: 15px 0;">------</h1>
+            <p style="font-size: 13px; color: #7f8c8d;">Expires in: <span id="otpTimer">30</span>s</p>
+            <button class="btn" onclick="closeOtpModal()">Close</button>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
-    <!-- Your Custom Bridge Logic -->
     <script src="app.js"></script>
 </body>
 </html>
