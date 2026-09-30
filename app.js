@@ -3,7 +3,7 @@ let contract;
 let connectedAccount = null;
 
 // Your deployed contract address from Ganache:
-const contractAddress = "0x2d40B61f8f66c205d63bda9bF9905Edd1bB52629";
+const contractAddress = "0x4070c4c4F31e56Ad17d8f376d44DBc0fF17bf93E";
 
 // Exact ABI matching your current TicketSystem.sol
 const contractABI = [
@@ -298,22 +298,17 @@ async function loadListings() {
     }
 }
 
-// 4. Create Listing (Admin)
+// 4. Create Listing (Admin) - Makes the sale live immediately
 async function createListing() {
     if (!web3 || !connectedAccount) return alert("Please connect your wallet first!");
 
     const price = document.getElementById("ticketPrice").value;
     const supply = document.getElementById("ticketSupply").value;
-    const liveTimeInput = document.getElementById("ticketLiveTime").value;
 
     if (!price || !supply) return alert("Please fill in price and supply.");
 
-    // Enter 0 for immediate release, or enter seconds from now
-    let liveTimestamp = 0;
-    const seconds = Number(liveTimeInput);
-    if (seconds > 0) {
-        liveTimestamp = Math.floor(Date.now() / 1000) + seconds;
-    }
+    // Set liveTime to right now so the sale is active immediately
+    const liveTimestamp = Math.floor(Date.now() / 1000);
 
     try {
         const priceWei = web3.utils.toWei(price, "ether");
@@ -325,7 +320,7 @@ async function createListing() {
         });
 
         document.getElementById("status").innerHTML = "Listing created on-chain!";
-        alert("Listing created successfully!");
+        alert("Listing created successfully and is now Live!");
         loadListings();
     } catch (error) {
         console.error("Create listing error:", error);
