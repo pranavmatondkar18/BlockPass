@@ -3,7 +3,7 @@ let contract;
 let connectedAccount = null;
 
 // Your deployed contract address from Ganache:
-const contractAddress = "0x4070c4c4F31e56Ad17d8f376d44DBc0fF17bf93E";
+const contractAddress = "0x33E8B46E4db16D10EFe831F2c31F4B1A62e8bEaC";
 
 // Exact ABI matching your current TicketSystem.sol
 const contractABI = [
@@ -263,7 +263,6 @@ async function loadListings() {
                 <p><strong>Status:</strong> ${active ? (isLive ? "<span style='color:green;'>Live</span>" : "<span style='color:orange;'>Upcoming</span>") : "<span style='color:gray;'>Closed</span>"}</p>
             `;
 
-            // Buyer card includes the direct buy button
             buyerHtml += `
                 <div class="card" style="border: 1px solid #3498db; margin-bottom: 12px; padding: 12px; border-radius: 6px;">
                     ${baseCard}
@@ -279,7 +278,6 @@ async function loadListings() {
                 </div>
             `;
 
-            // Seller card (info only)
             sellerHtml += `
                 <div class="card" style="border: 1px solid #ddd; margin-bottom: 12px; padding: 12px; border-radius: 6px;">
                     ${baseCard}
@@ -298,7 +296,7 @@ async function loadListings() {
     }
 }
 
-// 4. Create Listing (Admin) - Makes the sale live immediately
+// 4. Create Listing (Admin)
 async function createListing() {
     if (!web3 || !connectedAccount) return alert("Please connect your wallet first!");
 
@@ -307,7 +305,6 @@ async function createListing() {
 
     if (!price || !supply) return alert("Please fill in price and supply.");
 
-    // Set liveTime to right now so the sale is active immediately
     const liveTimestamp = Math.floor(Date.now() / 1000);
 
     try {
@@ -329,7 +326,7 @@ async function createListing() {
     }
 }
 
-// 5. Load Buyer Inventory (Scanning tokens directly: Prevents decoding & index errors)
+// 5. Load Buyer Inventory
 async function loadUserInventory() {
     const container = document.getElementById("inventoryContainer");
     if (!container || !contract || !connectedAccount) return;
@@ -353,7 +350,6 @@ async function loadUserInventory() {
             const isResold = t.isResold !== undefined ? t.isResold : t[3];
             const claimed = t.claimed !== undefined ? t.claimed : t[4];
 
-            // Render only if currently owned by user and not in resale escrow
             if (owner === connectedAccount.toLowerCase() && !isResold) {
                 count++;
                 html += `
@@ -480,7 +476,6 @@ function refreshOtp(tokenId) {
     const timeSlice = Math.floor(now / windowPeriod);
     const timeLeft = windowPeriod - (now % windowPeriod);
 
-    // Deterministic 6-digit pseudo-OTP based on token ID and current 30s epoch
     const rawVal = Math.abs(Math.sin(Number(tokenId) * 1000 + timeSlice) * 1000000);
     const otp = Math.floor(rawVal).toString().padStart(6, '0');
 
@@ -493,6 +488,19 @@ function closeOtpModal() {
     if (otpInterval) clearInterval(otpInterval);
 }
 
+// Local helper to validate rolling OTP matches current or adjacent window
+function verifyOtpLocally(tokenId, otpToCheck) {
+    const now = Math.floor(Date.now() / 1000);
+    const windowPeriod = 30;
+    for (let i = -1; i <= 1; i++) {
+        const timeSlice = Math.floor(now / windowPeriod) + i;
+        const rawVal = Math.abs(Math.sin(Number(tokenId) * 1000 + timeSlice) * 1000000);
+        const validOtp = Math.floor(rawVal).toString().padStart(6, '0');
+        if (validOtp === otpToCheck) return true;
+    }
+    return false;
+}
+
 // 10. Account Switch & Load Handlers
 if (window.ethereum) {
     window.ethereum.on('accountsChanged', () => window.location.reload());
@@ -501,5 +509,54 @@ if (window.ethereum) {
 window.addEventListener('load', async () => {
     if (typeof window.ethereum !== "undefined") {
         web3 = new Web3(window.ethereum);
+    }
+
+    // Gatekeeper Checkpoint Scanner Logic
+    const verifyBtn = document.getElementById('verifyTicketBtn');
+    if (verifyBtn) {
+        verifyBtn.addEventListener('click', async () => {
+            const tokenId = document.getElementById('scanTokenId').value;
+            const enteredOtp = document.getElementById('scanOtp').value;
+            const statusBox = document.getElementById('scanStatus');
+            const statusText = document.getElementById('statusText');
+
+            statusBox.classList.remove('hidden', 'status-success', 'status-error');
+
+            if (!tokenId || !enteredOtp) {
+                statusBox.classList.add('status-error');
+                statusText.innerText = "ERROR: Fill in all fields!";
+                return;
+            }
+
+            if (!connectedAccount) {
+                statusBox.classList.add('status-error');
+                statusText.innerText = "ERROR: Connect MetaMask first!";
+                return;
+            }
+
+            // Optional instant local check before blockchain call
+            if (!verifyOtpLocally(tokenId, enteredOtp)) {
+                statusBox.classList.add('status-error');
+                statusText.innerText = `ACCESS DENIED: Invalid or Expired OTP!`;
+                return;
+            }
+
+            try {
+                statusText.innerText = "VERIFYING ON-CHAIN...";
+                
+                // Calls your smart contract's claimTicket function using connectedAccount
+                await contract.methods.claimTicket(tokenId).send({ from: connectedAccount });
+
+                // Success state
+                statusBox.classList.add('status-success');
+                statusText.innerText = `ACCESS GRANTED // Ticket #${tokenId} Verified`;
+
+            } catch (error) {
+                // Error state (e.g., already claimed, invalid ID, or unauthorized)
+                statusBox.classList.add('status-error');
+                statusText.innerText = `ACCESS DENIED: Already used or invalid.`;
+                console.error(error);
+            }
+        });
     }
 });

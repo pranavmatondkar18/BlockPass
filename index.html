@@ -251,6 +251,28 @@
         </div>
     </div>
 
+    <div class="scanner-container cyber-card">
+    <h3>GATEKEEPER // CHECKPOINT SCANNER</h3>
+    <p class="subtitle">Enter ticket credentials or scan attendee pass to verify entry.</p>
+    
+    <div class="input-group">
+        <label for="scanTokenId">Ticket Token ID:</label>
+        <input type="number" id="scanTokenId" placeholder="e.g. 1, 2, 3..." class="cyber-input">
+    </div>
+
+    <div class="input-group">
+        <label for="scanOtp">Rolling OTP:</label>
+        <input type="text" id="scanOtp" placeholder="Enter 6-digit OTP" class="cyber-input">
+    </div>
+
+    <button id="verifyTicketBtn" class="cyber-btn">VERIFY & CLAIM TICKET</button>
+
+    <!-- Status Feedback Display -->
+    <div id="scanStatus" class="status-box hidden">
+        <span id="statusText">Awaiting input...</span>
+    </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
     <script src="app.js"></script>
 </body>
