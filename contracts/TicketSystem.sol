@@ -1,10 +1,10 @@
-//SPDX-License-Identifier:MIT
+// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.21;
 
 contract TicketSystem {
     struct Listing {
         uint256 id;
-        string name;        // <--- NEW: Event Name
+        string name;
         uint256 price;
         uint256 supply;
         uint256 soldCount;
@@ -25,27 +25,39 @@ contract TicketSystem {
     uint256 public listingCount;
     uint256 public tokenCount;
 
+    // Escrow tracking to protect refund funds
+    uint256 public lockedRefundEscrow;
+
+    // Reentrancy lock
+    bool private _locked;
+
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => Ticket) public tickets;
     mapping(address => uint256[]) public userTickets;
 
-    // Updated event with string name
     event ListingCreated(uint256 indexed listingId, string name, uint256 price, uint256 supply, uint256 liveTime);
     event ListingCancelled(uint256 indexed listingId);
     event TicketPurchased(uint256 indexed tokenId, uint256 indexed listingId, address buyer);
     event TicketRefunded(uint256 indexed tokenId, address seller, uint256 refundAmount);
     event TicketClaimed(uint256 indexed tokenId);
+    event FundsWithdrawn(address indexed admin, uint256 amount);
 
     modifier onlyAdmin() {
         require(msg.sender == admin, "Only admin can perform this action");
         _;
     }
 
+    modifier nonReentrant() {
+        require(!_locked, "Reentrancy detected");
+        _locked = true;
+        _;
+        _locked = false;
+    }
+
     constructor() {
         admin = msg.sender;
     }
 
-    // NEW: First parameter is now string memory name
     function createListing(string memory name, uint256 price, uint256 supply, uint256 liveTime) public onlyAdmin {
         require(bytes(name).length > 0, "Event name cannot be empty");
         listingCount++;
@@ -68,10 +80,14 @@ contract TicketSystem {
         
         listing.active = false;
         listing.isCancelled = true;
+
+        // Reserve 100% refund for all sold tickets
+        lockedRefundEscrow += (listing.price * listing.soldCount);
+
         emit ListingCancelled(listingId);
     }
 
-    function buyTicket(uint256 listingId) public payable {
+    function buyTicket(uint256 listingId) public payable nonReentrant {
         Listing storage listing = listings[listingId];
         require(listing.active, "Listing is not active");
         require(!listing.isCancelled, "Listing is cancelled");
@@ -94,7 +110,7 @@ contract TicketSystem {
         emit TicketPurchased(tokenCount, listingId, msg.sender);
     }
 
-    function claimCancelledRefund(uint256 tokenId) public {
+    function claimCancelledRefund(uint256 tokenId) public nonReentrant {
         Ticket storage ticket = tickets[tokenId];
         require(ticket.owner == msg.sender, "You do not own this ticket");
         require(!ticket.claimed, "Ticket already claimed/used");
@@ -107,13 +123,17 @@ contract TicketSystem {
         ticket.owner = address(0);
         ticket.claimed = true;
 
+        if (lockedRefundEscrow >= fullRefund) {
+            lockedRefundEscrow -= fullRefund;
+        }
+
         (bool sent, ) = payable(msg.sender).call{value: fullRefund}("");
         require(sent, "ETH refund transfer failed");
 
         emit TicketRefunded(tokenId, msg.sender, fullRefund);
     }
 
-    function resellRefund(uint256 tokenId) public {
+    function resellRefund(uint256 tokenId) public nonReentrant {
         Ticket storage ticket = tickets[tokenId];
         require(ticket.owner == msg.sender, "You do not own this ticket");
         require(!ticket.claimed, "Ticket already claimed/used");
@@ -133,7 +153,7 @@ contract TicketSystem {
         emit TicketRefunded(tokenId, msg.sender, refundAmount);
     }
 
-    function buyResellTicket(uint256 tokenId) public payable {
+    function buyResellTicket(uint256 tokenId) public payable nonReentrant {
         Ticket storage ticket = tickets[tokenId];
         require(ticket.isResold, "Ticket is not available for resale");
         require(!ticket.claimed, "Ticket already claimed");
@@ -156,5 +176,22 @@ contract TicketSystem {
 
         ticket.claimed = true;
         emit TicketClaimed(tokenId);
+    }
+
+    // Allows withdrawing surplus profits to admin while protecting active refund escrow
+    function withdraw() public onlyAdmin nonReentrant {
+        uint256 contractBalance = address(this).balance;
+        require(contractBalance > lockedRefundEscrow, "No surplus funds to withdraw");
+
+        uint256 withdrawableAmount = contractBalance - lockedRefundEscrow;
+
+        (bool sent, ) = payable(admin).call{value: withdrawableAmount}("");
+        require(sent, "ETH transfer failed");
+
+        emit FundsWithdrawn(admin, withdrawableAmount);
+    }
+
+    function getUserTickets(address user) public view returns (uint256[] memory) {
+        return userTickets[user];
     }
 }

@@ -3,15 +3,10 @@ let contract;
 let connectedAccount = null;
 
 // Replace with your new address after running truffle migrate --reset
-const contractAddress = "0x4F99eCB525f4FeDd09d985F6660e2660957baF4c";
+const contractAddress = "0x50BeE158C42Ae682fEA5621E9e6a5681fc3949ea";
 
-// Exact ABI matching updated TicketSystem.sol with event name
 const contractABI = [
-  {
-    "inputs": [],
-    "stateMutability": "nonpayable",
-    "type": "constructor"
-  },
+  { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
   {
     "anonymous": false,
     "inputs": [
@@ -26,17 +21,13 @@ const contractABI = [
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256" }
-    ],
+    "inputs": [{ "indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256" }],
     "name": "ListingCancelled",
     "type": "event"
   },
   {
     "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256" }
-    ],
+    "inputs": [{ "indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
     "name": "TicketClaimed",
     "type": "event"
   },
@@ -61,20 +52,27 @@ const contractABI = [
     "type": "event"
   },
   {
+    "anonymous": false,
+    "inputs": [
+      { "indexed": true, "internalType": "address", "name": "admin", "type": "address" },
+      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
+    ],
+    "name": "FundsWithdrawn",
+    "type": "event"
+  },
+  {
     "inputs": [],
     "name": "admin",
     "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
     "stateMutability": "view",
-    "type": "function",
-    "constant": true
+    "type": "function"
   },
   {
     "inputs": [],
     "name": "listingCount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
-    "type": "function",
-    "constant": true
+    "type": "function"
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
@@ -90,8 +88,7 @@ const contractABI = [
       { "internalType": "bool", "name": "isCancelled", "type": "bool" }
     ],
     "stateMutability": "view",
-    "type": "function",
-    "constant": true
+    "type": "function"
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
@@ -104,27 +101,21 @@ const contractABI = [
       { "internalType": "bool", "name": "claimed", "type": "bool" }
     ],
     "stateMutability": "view",
-    "type": "function",
-    "constant": true
+    "type": "function"
   },
   {
     "inputs": [],
     "name": "tokenCount",
     "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
     "stateMutability": "view",
-    "type": "function",
-    "constant": true
+    "type": "function"
   },
   {
-    "inputs": [
-      { "internalType": "address", "name": "", "type": "address" },
-      { "internalType": "uint256", "name": "", "type": "uint256" }
-    ],
-    "name": "userTickets",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
+    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
+    "name": "getUserTickets",
+    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
     "stateMutability": "view",
-    "type": "function",
-    "constant": true
+    "type": "function"
   },
   {
     "inputs": [
@@ -150,8 +141,7 @@ const contractABI = [
     "name": "buyTicket",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function",
-    "payable": true
+    "type": "function"
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
@@ -172,8 +162,7 @@ const contractABI = [
     "name": "buyResellTicket",
     "outputs": [],
     "stateMutability": "payable",
-    "type": "function",
-    "payable": true
+    "type": "function"
   },
   {
     "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
@@ -181,34 +170,43 @@ const contractABI = [
     "outputs": [],
     "stateMutability": "nonpayable",
     "type": "function"
+  },
+  {
+    "inputs": [],
+    "name": "withdraw",
+    "outputs": [],
+    "stateMutability": "nonpayable",
+    "type": "function"
   }
 ];
 
-// 1. Connect MetaMask
-async function connectWallet() {
-  if (typeof window.ethereum === "undefined") {
-    alert("Please install MetaMask to use this dApp!");
-    return;
-  }
+// 1. Account Initialization & Role Sync
+async function initAccount() {
+  if (typeof window.ethereum === "undefined") return;
 
   try {
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const accounts = await window.ethereum.request({ method: "eth_accounts" });
+    if (!accounts || accounts.length === 0) {
+      document.getElementById("status").innerHTML = "UNAUTHENTICATED";
+      document.getElementById("buyerPanel").style.display = "none";
+      document.getElementById("sellerPanel").style.display = "none";
+      return;
+    }
+
     web3 = new Web3(window.ethereum);
     contract = new web3.eth.Contract(contractABI, contractAddress);
 
     connectedAccount = accounts[0];
     document.getElementById("status").innerHTML = `${connectedAccount.substring(0, 6)}...${connectedAccount.substring(38)}`;
-    console.log("Wallet connected:", connectedAccount);
 
     const adminAddress = await contract.methods.admin().call();
     const isAdmin = connectedAccount.toLowerCase() === adminAddress.toLowerCase();
 
     if (isAdmin) {
-      console.log("Logged in as Admin");
       document.getElementById("sellerPanel").style.display = "block";
       document.getElementById("buyerPanel").style.display = "none";
+      updateTreasuryBalance();
     } else {
-      console.log("Logged in as Buyer");
       document.getElementById("sellerPanel").style.display = "none";
       document.getElementById("buyerPanel").style.display = "block";
       loadUserInventory();
@@ -217,8 +215,51 @@ async function connectWallet() {
 
     loadListings();
   } catch (error) {
-    console.error("Connection failed:", error);
-    alert("Connection failed: " + (error.message || error));
+    console.error("Account sync error:", error);
+  }
+}
+
+async function connectWallet() {
+  if (typeof window.ethereum === "undefined") {
+    alert("Please install MetaMask to use this dApp!");
+    return;
+  }
+  try {
+    await window.ethereum.request({ method: "eth_requestAccounts" });
+    await initAccount();
+  } catch (err) {
+    alert("Connection failed: " + (err.message || err));
+  }
+}
+
+// Update Treasury Balance on Admin View
+async function updateTreasuryBalance() {
+  const balanceDisplay = document.getElementById("contractBalanceText");
+  if (!balanceDisplay || !web3) return;
+
+  try {
+    const balanceWei = await web3.eth.getBalance(contractAddress);
+    const balanceEth = web3.utils.fromWei(balanceWei.toString(), "ether");
+    balanceDisplay.innerText = `${balanceEth} ETH`;
+  } catch (err) {
+    console.error("Error fetching contract balance:", err);
+  }
+}
+
+// Admin Withdraw
+async function withdrawFunds() {
+  if (!web3 || !connectedAccount) return alert("Please connect wallet first!");
+
+  try {
+    document.getElementById("status").innerHTML = "Withdrawing treasury funds...";
+    await contract.methods.withdraw().send({ from: connectedAccount });
+
+    alert("Funds successfully transferred to Admin wallet!");
+    document.getElementById("status").innerHTML = "Ready";
+    updateTreasuryBalance();
+  } catch (error) {
+    console.error("Withdraw failed:", error);
+    alert("Withdraw failed: " + (error.reason || error.message || error));
   }
 }
 
@@ -240,6 +281,7 @@ async function buyListingDirect(listingId, priceWei) {
 
     loadListings();
     loadUserInventory();
+    updateTreasuryBalance();
   } catch (error) {
     console.error("Buy error:", error);
     document.getElementById("status").innerHTML = "Transaction failed.";
@@ -387,6 +429,7 @@ async function cancelListing(listingId) {
     alert(`Listing #${listingId} cancelled!`);
     document.getElementById("status").innerHTML = "Ready";
     loadListings();
+    loadResellListings();
   } catch (error) {
     console.error("Cancel listing error:", error);
     alert("Cancel failed: " + (error.reason || error.message || error));
@@ -408,6 +451,7 @@ async function claimFullRefund(tokenId) {
     alert(`100% refund received for Ticket #${tokenId}!`);
     document.getElementById("status").innerHTML = "Ready";
     loadUserInventory();
+    updateTreasuryBalance();
   } catch (error) {
     console.error("Full refund error:", error);
     alert("Refund claim failed: " + (error.reason || error.message || error));
@@ -422,8 +466,10 @@ async function loadUserInventory() {
   container.innerHTML = "Fetching your tickets...";
 
   try {
-    const totalTokens = Number(await contract.methods.tokenCount().call());
-    if (totalTokens === 0) {
+    const userTokenIds = await contract.methods.getUserTickets(connectedAccount).call();
+    const uniqueIds = [...new Set(userTokenIds.map(Number))];
+
+    if (uniqueIds.length === 0) {
       container.innerHTML = "<p>You do not own any tickets yet.</p>";
       return;
     }
@@ -431,7 +477,7 @@ async function loadUserInventory() {
     let html = "";
     let count = 0;
 
-    for (let tid = 1; tid <= totalTokens; tid++) {
+    for (let tid of uniqueIds) {
       const t = await contract.methods.tickets(tid).call();
       const listingId = t.listingId !== undefined ? t.listingId : t[1];
       const owner = (t.owner !== undefined ? t.owner : t[2]).toLowerCase();
@@ -447,7 +493,7 @@ async function loadUserInventory() {
 
         let statusText = "<span style='color:green;'>Valid</span>";
         if (claimed) {
-          statusText = "<span style='color:gray;'>Claimed / Refunded</span>";
+          statusText = "<span style='color:gray;'>Claimed / Used</span>";
         } else if (isEventCancelled) {
           statusText = "<span style='color:red;'>Event Cancelled</span>";
         }
@@ -492,6 +538,7 @@ async function initiateResale(tokenId) {
     document.getElementById("status").innerHTML = "Ready";
     loadUserInventory();
     loadResellListings();
+    updateTreasuryBalance();
   } catch (error) {
     console.error("Resale refund failed:", error);
     alert("Refund failed: " + (error.reason || error.message || error));
@@ -565,6 +612,7 @@ async function buyResellTicketDirect(tokenId, priceWei) {
     document.getElementById("status").innerHTML = "Ready";
     loadResellListings();
     loadUserInventory();
+    updateTreasuryBalance();
   } catch (error) {
     console.error("Resale purchase error:", error);
     alert("Purchase failed: " + (error.reason || error.message || error));
@@ -613,14 +661,28 @@ function verifyOtpLocally(tokenId, otpToCheck) {
   return false;
 }
 
-// 12. Account & Page Handlers
+// 12. Account Switch & Reload Listeners
 if (window.ethereum) {
-  window.ethereum.on('accountsChanged', () => window.location.reload());
+  window.ethereum.on('accountsChanged', async (accounts) => {
+    if (!accounts || accounts.length === 0) {
+      connectedAccount = null;
+      document.getElementById("status").innerHTML = "DISCONNECTED";
+      document.getElementById("buyerPanel").style.display = "none";
+      document.getElementById("sellerPanel").style.display = "none";
+    } else {
+      await initAccount();
+    }
+  });
+
+  window.ethereum.on('chainChanged', () => {
+    window.location.reload();
+  });
 }
 
 window.addEventListener('load', async () => {
   if (typeof window.ethereum !== "undefined") {
     web3 = new Web3(window.ethereum);
+    await initAccount();
   }
 
   const verifyBtn = document.getElementById('verifyTicketBtn');
