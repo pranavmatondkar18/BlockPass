@@ -1,729 +1,489 @@
-let web3;
-let contract;
+let web3, contract;
 let connectedAccount = null;
+let isAdminAccount = false;
+let activeTokenIdForSigning = null;
 
-// Replace with your new address after running truffle migrate --reset
-const contractAddress = "0x50BeE158C42Ae682fEA5621E9e6a5681fc3949ea";
+// After `truffle migrate --reset`, paste the new TicketSystem address here.
+const contractAddress = "0x447e719816739F944b09855B671c4248410341b4";
 
+const PASS_WINDOW = 60; // seconds per signature window (current + previous window accepted)
+const ZERO = "0x0000000000000000000000000000000000000000";
+
+// Events are omitted: the UI reads state directly and never subscribes to them.
+const u = "uint256";
 const contractABI = [
-  { "inputs": [], "stateMutability": "nonpayable", "type": "constructor" },
+  { type: "constructor", stateMutability: "nonpayable", inputs: [] },
+  { type: "function", name: "admin", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
+  { type: "function", name: "listingCount", stateMutability: "view", inputs: [], outputs: [{ name: "", type: u }] },
+  { type: "function", name: "tokenCount", stateMutability: "view", inputs: [], outputs: [{ name: "", type: u }] },
   {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256" },
-      { "indexed": false, "internalType": "string", "name": "name", "type": "string" },
-      { "indexed": false, "internalType": "uint256", "name": "price", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "supply", "type": "uint256" },
-      { "indexed": false, "internalType": "uint256", "name": "liveTime", "type": "uint256" }
-    ],
-    "name": "ListingCreated",
-    "type": "event"
+    type: "function", name: "listings", stateMutability: "view", inputs: [{ name: "", type: u }],
+    outputs: [
+      { name: "id", type: u }, { name: "name", type: "string" }, { name: "price", type: u },
+      { name: "supply", type: u }, { name: "soldCount", type: u }, { name: "liveTime", type: u },
+      { name: "active", type: "bool" }, { name: "isCancelled", type: "bool" },
+      { name: "eventTime", type: u }, { name: "heldCount", type: u }
+    ]
   },
   {
-    "anonymous": false,
-    "inputs": [{ "indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256" }],
-    "name": "ListingCancelled",
-    "type": "event"
+    type: "function", name: "tickets", stateMutability: "view", inputs: [{ name: "", type: u }],
+    outputs: [
+      { name: "tokenId", type: u }, { name: "listingId", type: u }, { name: "owner", type: "address" },
+      { name: "isResold", type: "bool" }, { name: "claimed", type: "bool" }
+    ]
   },
+  { type: "function", name: "getUserTickets", stateMutability: "view", inputs: [{ name: "user", type: "address" }], outputs: [{ name: "", type: "uint256[]" }] },
   {
-    "anonymous": false,
-    "inputs": [{ "indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-    "name": "TicketClaimed",
-    "type": "event"
+    type: "function", name: "createListing", stateMutability: "nonpayable", outputs: [],
+    inputs: [{ name: "name", type: "string" }, { name: "price", type: u }, { name: "supply", type: u }, { name: "liveTime", type: u }, { name: "eventTime", type: u }]
   },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256" },
-      { "indexed": true, "internalType": "uint256", "name": "listingId", "type": "uint256" },
-      { "indexed": false, "internalType": "address", "name": "buyer", "type": "address" }
-    ],
-    "name": "TicketPurchased",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "uint256", "name": "tokenId", "type": "uint256" },
-      { "indexed": false, "internalType": "address", "name": "seller", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "refundAmount", "type": "uint256" }
-    ],
-    "name": "TicketRefunded",
-    "type": "event"
-  },
-  {
-    "anonymous": false,
-    "inputs": [
-      { "indexed": true, "internalType": "address", "name": "admin", "type": "address" },
-      { "indexed": false, "internalType": "uint256", "name": "amount", "type": "uint256" }
-    ],
-    "name": "FundsWithdrawn",
-    "type": "event"
-  },
-  {
-    "inputs": [],
-    "name": "admin",
-    "outputs": [{ "internalType": "address", "name": "", "type": "address" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "listingCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "listings",
-    "outputs": [
-      { "internalType": "uint256", "name": "id", "type": "uint256" },
-      { "internalType": "string", "name": "name", "type": "string" },
-      { "internalType": "uint256", "name": "price", "type": "uint256" },
-      { "internalType": "uint256", "name": "supply", "type": "uint256" },
-      { "internalType": "uint256", "name": "soldCount", "type": "uint256" },
-      { "internalType": "uint256", "name": "liveTime", "type": "uint256" },
-      { "internalType": "bool", "name": "active", "type": "bool" },
-      { "internalType": "bool", "name": "isCancelled", "type": "bool" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "name": "tickets",
-    "outputs": [
-      { "internalType": "uint256", "name": "tokenId", "type": "uint256" },
-      { "internalType": "uint256", "name": "listingId", "type": "uint256" },
-      { "internalType": "address", "name": "owner", "type": "address" },
-      { "internalType": "bool", "name": "isResold", "type": "bool" },
-      { "internalType": "bool", "name": "claimed", "type": "bool" }
-    ],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "tokenCount",
-    "outputs": [{ "internalType": "uint256", "name": "", "type": "uint256" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "address", "name": "user", "type": "address" }],
-    "name": "getUserTickets",
-    "outputs": [{ "internalType": "uint256[]", "name": "", "type": "uint256[]" }],
-    "stateMutability": "view",
-    "type": "function"
-  },
-  {
-    "inputs": [
-      { "internalType": "string", "name": "name", "type": "string" },
-      { "internalType": "uint256", "name": "price", "type": "uint256" },
-      { "internalType": "uint256", "name": "supply", "type": "uint256" },
-      { "internalType": "uint256", "name": "liveTime", "type": "uint256" }
-    ],
-    "name": "createListing",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "listingId", "type": "uint256" }],
-    "name": "cancelListing",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "listingId", "type": "uint256" }],
-    "name": "buyTicket",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-    "name": "claimCancelledRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-    "name": "resellRefund",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-    "name": "buyResellTicket",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  },
-  {
-    "inputs": [{ "internalType": "uint256", "name": "tokenId", "type": "uint256" }],
-    "name": "claimTicket",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  },
-  {
-    "inputs": [],
-    "name": "withdraw",
-    "outputs": [],
-    "stateMutability": "nonpayable",
-    "type": "function"
-  }
+  { type: "function", name: "cancelListing", stateMutability: "nonpayable", inputs: [{ name: "listingId", type: u }], outputs: [] },
+  { type: "function", name: "buyTicket", stateMutability: "payable", inputs: [{ name: "listingId", type: u }], outputs: [] },
+  { type: "function", name: "claimCancelledRefund", stateMutability: "nonpayable", inputs: [{ name: "tokenId", type: u }], outputs: [] },
+  { type: "function", name: "resellRefund", stateMutability: "nonpayable", inputs: [{ name: "tokenId", type: u }], outputs: [] },
+  { type: "function", name: "buyResellTicket", stateMutability: "payable", inputs: [{ name: "tokenId", type: u }], outputs: [] },
+  { type: "function", name: "claimTicket", stateMutability: "nonpayable", inputs: [{ name: "tokenId", type: u }], outputs: [] },
+  { type: "function", name: "withdraw", stateMutability: "nonpayable", inputs: [], outputs: [] }
 ];
 
-// 1. Account Initialization & Role Sync
+// ---------- helpers ----------
+const $ = id => document.getElementById(id);
+const nowSec = () => Math.floor(Date.now() / 1000);
+const pick = (o, k, i) => (o[k] !== undefined ? o[k] : o[i]);
+const errMsg = e => e.reason || (e.cause && e.cause.message) || e.message || String(e);
+const ethOf = wei => web3.utils.fromWei(wei.toString(), "ether");
+const when = sec => new Date(sec * 1000).toLocaleString();
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const setStatus = t => { $("status").innerHTML = t; };
+const idle = () => setStatus(connectedAccount ? `${connectedAccount.substring(0, 6)}...${connectedAccount.substring(38)}` : "UNAUTHENTICATED");
+const showPanels = (buyer, seller) => {
+  $("buyerPanel").style.display = buyer ? "block" : "none";
+  $("sellerPanel").style.display = seller ? "block" : "none";
+};
+
+function readListing(x) {
+  return {
+    id: pick(x, "id", 0), name: pick(x, "name", 1), priceWei: pick(x, "price", 2),
+    supply: Number(pick(x, "supply", 3)), sold: Number(pick(x, "soldCount", 4)),
+    liveTime: Number(pick(x, "liveTime", 5)), active: Boolean(pick(x, "active", 6)),
+    cancelled: Boolean(pick(x, "isCancelled", 7)), eventTime: Number(pick(x, "eventTime", 8))
+  };
+}
+
+function readTicket(t) {
+  return {
+    listingId: pick(t, "listingId", 1), owner: String(pick(t, "owner", 2)).toLowerCase(),
+    isResold: Boolean(pick(t, "isResold", 3)), claimed: Boolean(pick(t, "claimed", 4))
+  };
+}
+
+// Runs one transaction with status text, error reporting and a refresh callback.
+async function run(label, action, okMsg, refresh) {
+  if (!web3 || !connectedAccount) return alert("Please connect your wallet first!");
+  try {
+    setStatus(label);
+    await action();
+    alert(okMsg);
+    if (refresh) refresh();
+  } catch (e) {
+    console.error(label, e);
+    alert(`${label} failed: ${errMsg(e)}`);
+  } finally {
+    idle();
+  }
+}
+
+// ---------- 1. account + role sync ----------
 async function initAccount() {
   if (typeof window.ethereum === "undefined") return;
-
   try {
     const accounts = await window.ethereum.request({ method: "eth_accounts" });
     if (!accounts || accounts.length === 0) {
-      document.getElementById("status").innerHTML = "UNAUTHENTICATED";
-      document.getElementById("buyerPanel").style.display = "none";
-      document.getElementById("sellerPanel").style.display = "none";
+      connectedAccount = null;
+      isAdminAccount = false;
+      idle();
+      showPanels(false, false);
       return;
     }
 
     web3 = new Web3(window.ethereum);
+    connectedAccount = accounts[0];
+    idle();
+
+    if (!web3.utils.isAddress(contractAddress)) {
+      setStatus("Set contractAddress in app.js");
+      return;
+    }
     contract = new web3.eth.Contract(contractABI, contractAddress);
 
-    connectedAccount = accounts[0];
-    document.getElementById("status").innerHTML = `${connectedAccount.substring(0, 6)}...${connectedAccount.substring(38)}`;
-
     const adminAddress = await contract.methods.admin().call();
-    const isAdmin = connectedAccount.toLowerCase() === adminAddress.toLowerCase();
+    isAdminAccount = connectedAccount.toLowerCase() === adminAddress.toLowerCase();
 
-    if (isAdmin) {
-      document.getElementById("sellerPanel").style.display = "block";
-      document.getElementById("buyerPanel").style.display = "none";
+    showPanels(!isAdminAccount, isAdminAccount);
+    if (isAdminAccount) {
       updateTreasuryBalance();
     } else {
-      document.getElementById("sellerPanel").style.display = "none";
-      document.getElementById("buyerPanel").style.display = "block";
       loadUserInventory();
       loadResellListings();
     }
-
     loadListings();
   } catch (error) {
     console.error("Account sync error:", error);
+    setStatus("Wrong network or contract address?");
   }
 }
 
 async function connectWallet() {
-  if (typeof window.ethereum === "undefined") {
-    alert("Please install MetaMask to use this dApp!");
-    return;
-  }
+  if (typeof window.ethereum === "undefined") return alert("Please install MetaMask to use this dApp!");
   try {
     await window.ethereum.request({ method: "eth_requestAccounts" });
     await initAccount();
   } catch (err) {
-    alert("Connection failed: " + (err.message || err));
+    alert("Connection failed: " + errMsg(err));
   }
 }
 
-// Update Treasury Balance on Admin View
+// ---------- 2. treasury ----------
 async function updateTreasuryBalance() {
-  const balanceDisplay = document.getElementById("contractBalanceText");
-  if (!balanceDisplay || !web3) return;
-
+  const el = $("contractBalanceText");
+  if (!el || !web3) return;
   try {
-    const balanceWei = await web3.eth.getBalance(contractAddress);
-    const balanceEth = web3.utils.fromWei(balanceWei.toString(), "ether");
-    balanceDisplay.innerText = `${balanceEth} ETH`;
+    el.innerText = `${ethOf(await web3.eth.getBalance(contractAddress))} ETH`;
   } catch (err) {
     console.error("Error fetching contract balance:", err);
   }
 }
 
-// Admin Withdraw
-async function withdrawFunds() {
-  if (!web3 || !connectedAccount) return alert("Please connect wallet first!");
-
-  try {
-    document.getElementById("status").innerHTML = "Withdrawing treasury funds...";
-    await contract.methods.withdraw().send({ from: connectedAccount });
-
-    alert("Funds successfully transferred to Admin wallet!");
-    document.getElementById("status").innerHTML = "Ready";
-    updateTreasuryBalance();
-  } catch (error) {
-    console.error("Withdraw failed:", error);
-    alert("Withdraw failed: " + (error.reason || error.message || error));
-  }
+function withdrawFunds() {
+  run("Withdrawing surplus", () => contract.methods.withdraw().send({ from: connectedAccount }),
+    "Surplus transferred to the admin wallet.", updateTreasuryBalance);
 }
 
-// 2. Buy Primary Listing
-async function buyListingDirect(listingId, priceWei) {
-  if (!web3 || !connectedAccount) return alert("Please connect your wallet first!");
-
-  try {
-    document.getElementById("status").innerHTML = `Purchasing Ticket for Listing #${listingId}...`;
-
-    await contract.methods.buyTicket(listingId).send({
-      from: connectedAccount,
-      value: priceWei,
-      gas: 350000
-    });
-
-    document.getElementById("status").innerHTML = "Ticket secured on-chain!";
-    alert(`Successfully purchased ticket for Listing #${listingId}!`);
-
-    loadListings();
-    loadUserInventory();
-    updateTreasuryBalance();
-  } catch (error) {
-    console.error("Buy error:", error);
-    document.getElementById("status").innerHTML = "Transaction failed.";
-    alert("Purchase failed: " + (error.reason || error.message || error));
-  }
+// ---------- 3. primary listings ----------
+function buyListingDirect(listingId, priceWei) {
+  run(`Buying ticket for listing #${listingId}`,
+    () => contract.methods.buyTicket(listingId).send({ from: connectedAccount, value: priceWei }),
+    `Ticket purchased for listing #${listingId}!`,
+    () => { loadListings(); loadUserInventory(); });
 }
 
-// 3. Load & Render Primary Listings
 async function loadListings() {
-  const containers = [
-    document.getElementById("listingsContainer"),
-    document.getElementById("sellerListingsContainer")
-  ];
+  if (!contract) return;
+  const buyerBox = $("listingsContainer");
+  const sellerBox = $("sellerListingsContainer");
 
   try {
     const total = Number(await contract.methods.listingCount().call());
     if (total === 0) {
-      containers.forEach(c => { if (c) c.innerHTML = "<p>No listings created yet.</p>"; });
+      [buyerBox, sellerBox].forEach(c => { if (c) c.innerHTML = "<p>No listings created yet.</p>"; });
       return;
     }
 
-    let buyerHtml = "";
-    let sellerHtml = "";
-    const now = Math.floor(Date.now() / 1000);
+    let buyerHtml = "", sellerHtml = "";
+    const now = nowSec();
 
     for (let i = 1; i <= total; i++) {
       try {
-        const item = await contract.methods.listings(i).call();
-        const id = item.id !== undefined ? item.id : item[0];
-        const name = item.name !== undefined ? item.name : item[1];
-        const priceWei = item.price !== undefined ? item.price : item[2];
-        const supply = item.supply !== undefined ? item.supply : item[3];
-        const soldCount = item.soldCount !== undefined ? item.soldCount : item[4];
-        const liveTime = item.liveTime !== undefined ? item.liveTime : item[5];
-        const active = item.active !== undefined ? item.active : item[6];
-        const isCancelled = item.isCancelled !== undefined ? Boolean(item.isCancelled) : Boolean(item[7]);
+        const l = readListing(await contract.methods.listings(i).call());
+        const priceEth = ethOf(l.priceWei);
+        const remaining = l.supply - l.sold;
+        const isLive = now >= l.liveTime;
+        const started = now >= l.eventTime;
+        const canBuy = l.active && !l.cancelled && isLive && !started && remaining > 0;
 
-        const priceEth = web3.utils.fromWei(priceWei.toString(), "ether");
-        const remaining = Number(supply) - Number(soldCount);
-        const liveDate = new Date(Number(liveTime) * 1000).toLocaleString();
-        const isLive = now >= Number(liveTime);
-        const canBuy = active && !isCancelled && isLive && remaining > 0;
+        let badge = "<span style='color:gray;'>Closed</span>";
+        if (l.cancelled) badge = "<span style='color:red;'>CANCELLED</span>";
+        else if (started) badge = "<span style='color:gray;'>Event started</span>";
+        else if (l.active) badge = isLive ? "<span style='color:green;'>Live</span>" : "<span style='color:orange;'>Upcoming</span>";
 
-        let statusBadge = "<span style='color:gray;'>Closed</span>";
-        if (isCancelled) {
-          statusBadge = "<span style='color:red;'>CANCELLED</span>";
-        } else if (active) {
-          statusBadge = isLive ? "<span style='color:green;'>Live</span>" : "<span style='color:orange;'>Upcoming</span>";
-        }
-
-        const baseCard = `
-          <h4>${name || "Event"} <span style="font-size: 12px; color: var(--text-muted);">(#${id})</span></h4>
+        const card = `
+          <h4>${esc(l.name || "Event")} <span style="font-size: 12px; color: var(--text-muted);">(#${l.id})</span></h4>
           <p><strong>Price:</strong> ${priceEth} ETH</p>
-          <p><strong>Available:</strong> ${remaining} / ${supply}</p>
-          <p><strong>Start Date:</strong> ${liveDate}</p>
-          <p><strong>Status:</strong> ${statusBadge}</p>
-        `;
+          <p><strong>Available:</strong> ${remaining} / ${l.supply}</p>
+          <p><strong>Sale starts:</strong> ${when(l.liveTime)}</p>
+          <p><strong>Event starts:</strong> ${when(l.eventTime)}</p>
+          <p><strong>Status:</strong> ${badge}</p>`;
+
+        const why = l.cancelled ? "Event Cancelled" : started ? "Event Started" : !l.active ? "Sale Closed" : !isLive ? "Not Live Yet" : "Sold Out";
 
         buyerHtml += `
           <div class="card" style="border: 1px solid #3498db; margin-bottom: 12px; padding: 12px; border-radius: 6px;">
-            ${baseCard}
-            ${canBuy ? `
-              <button class="btn" onclick="buyListingDirect(${id}, '${priceWei.toString()}')">
-                Buy Ticket for ${priceEth} ETH
-              </button>
-            ` : `
-              <button class="btn" disabled style="background:#bdc3c7;">
-                ${isCancelled ? "Event Cancelled" : (!active ? "Sale Closed" : (!isLive ? "Not Live Yet" : "Sold Out"))}
-              </button>
-            `}
-          </div>
-        `;
+            ${card}
+            ${canBuy
+              ? `<button class="btn" onclick="buyListingDirect(${l.id}, '${l.priceWei.toString()}')">Buy Ticket for ${priceEth} ETH</button>
+                 <p class="hint">Limit: 4 tickets per wallet</p>`
+              : `<button class="btn" disabled style="background:#bdc3c7;">${why}</button>`}
+          </div>`;
 
         sellerHtml += `
           <div class="card" style="border: 1px solid #ddd; margin-bottom: 12px; padding: 12px; border-radius: 6px;">
-            ${baseCard}
-            ${!isCancelled && active ? `
-              <button class="btn" style="background:#e74c3c; margin-top:8px;" onclick="cancelListing(${id})">
-                Cancel Listing
-              </button>
-            ` : ""}
-          </div>
-        `;
+            ${card}
+            ${!l.cancelled && l.active && !started
+              ? `<button class="btn" style="background:#e74c3c; margin-top:8px;" onclick="cancelListing(${l.id})">Cancel Listing</button>` : ""}
+          </div>`;
       } catch (err) {
         console.error(`Error loading listing #${i}:`, err);
       }
     }
 
-    const buyerContainer = document.getElementById("listingsContainer");
-    const sellerContainer = document.getElementById("sellerListingsContainer");
-
-    if (buyerContainer) buyerContainer.innerHTML = buyerHtml || "<p>No active listings.</p>";
-    if (sellerContainer) sellerContainer.innerHTML = sellerHtml || "<p>No active listings.</p>";
-
+    if (buyerBox) buyerBox.innerHTML = buyerHtml || "<p>No active listings.</p>";
+    if (sellerBox) sellerBox.innerHTML = sellerHtml || "<p>No active listings.</p>";
   } catch (error) {
     console.error("Load listings error:", error);
   }
 }
 
-// 4. Create Listing (Admin)
-async function createListing() {
-  if (!web3 || !connectedAccount) return alert("Please connect your wallet first!");
-
-  const name = document.getElementById("ticketName") ? document.getElementById("ticketName").value.trim() : "Event Ticket";
-  const price = document.getElementById("ticketPrice").value;
-  const supply = document.getElementById("ticketSupply").value;
-  const delaySec = document.getElementById("ticketLiveTime").value || 0;
+// ---------- 4. admin: create + cancel ----------
+function createListing() {
+  const name = $("ticketName").value.trim();
+  const price = $("ticketPrice").value.trim();
+  const supply = Number($("ticketSupply").value);
+  const delaySec = Number($("ticketLiveTime").value || 0);
+  const eventVal = $("ticketEventTime").value;
 
   if (!name) return alert("Please specify an event name.");
-  if (!price || !supply) return alert("Please fill in price and supply.");
+  if (!(Number(price) > 0) || !Number.isInteger(supply) || supply <= 0) return alert("Enter a positive price and a whole-number supply.");
+  if (!eventVal) return alert("Please choose the event start date and time.");
 
-  const liveTimestamp = Math.floor(Date.now() / 1000) + Number(delaySec);
+  const liveTime = nowSec() + delaySec;
+  const eventTime = Math.floor(new Date(eventVal).getTime() / 1000);
+  if (eventTime <= liveTime) return alert("The event must start after the sale starts.");
 
-  try {
-    const priceWei = web3.utils.toWei(price, "ether");
-    document.getElementById("status").innerHTML = "Creating listing in MetaMask...";
-
-    await contract.methods.createListing(name, priceWei, supply, liveTimestamp).send({
-      from: connectedAccount,
-      gas: 350000
-    });
-
-    document.getElementById("status").innerHTML = "Listing created on-chain!";
-    alert(`Listing "${name}" created successfully!`);
-    loadListings();
-  } catch (error) {
-    console.error("Create listing error:", error);
-    document.getElementById("status").innerHTML = "Listing creation failed.";
-    alert("Listing failed: " + (error.reason || error.message || error));
-  }
+  run("Creating listing",
+    () => contract.methods.createListing(name, web3.utils.toWei(price, "ether"), supply, liveTime, eventTime).send({ from: connectedAccount }),
+    `Listing "${name}" created!`, loadListings);
 }
 
-// 5. Cancel Listing (Admin)
-async function cancelListing(listingId) {
-  if (!confirm(`Cancel Listing #${listingId}? Ticket holders will be able to claim a 100% refund.`)) return;
-
-  try {
-    document.getElementById("status").innerHTML = `Cancelling Listing #${listingId}...`;
-
-    await contract.methods.cancelListing(listingId).send({
-      from: connectedAccount,
-      gas: 200000
-    });
-
-    alert(`Listing #${listingId} cancelled!`);
-    document.getElementById("status").innerHTML = "Ready";
-    loadListings();
-    loadResellListings();
-  } catch (error) {
-    console.error("Cancel listing error:", error);
-    alert("Cancel failed: " + (error.reason || error.message || error));
-  }
+function cancelListing(listingId) {
+  if (!confirm(`Cancel listing #${listingId}? Ticket holders will be able to claim a 100% refund.`)) return;
+  run(`Cancelling listing #${listingId}`,
+    () => contract.methods.cancelListing(listingId).send({ from: connectedAccount }),
+    `Listing #${listingId} cancelled.`, () => { loadListings(); loadResellListings(); });
 }
 
-// 6. Claim 100% Full Refund
-async function claimFullRefund(tokenId) {
-  if (!confirm(`Claim 100% full refund for Ticket #${tokenId}?`)) return;
-
-  try {
-    document.getElementById("status").innerHTML = `Claiming refund for Ticket #${tokenId}...`;
-
-    await contract.methods.claimCancelledRefund(tokenId).send({
-      from: connectedAccount,
-      gas: 250000
-    });
-
-    alert(`100% refund received for Ticket #${tokenId}!`);
-    document.getElementById("status").innerHTML = "Ready";
-    loadUserInventory();
-    updateTreasuryBalance();
-  } catch (error) {
-    console.error("Full refund error:", error);
-    alert("Refund claim failed: " + (error.reason || error.message || error));
-  }
+// ---------- 5. buyer inventory ----------
+function claimFullRefund(tokenId) {
+  if (!confirm(`Claim 100% refund for ticket #${tokenId}?`)) return;
+  run(`Claiming refund for ticket #${tokenId}`,
+    () => contract.methods.claimCancelledRefund(tokenId).send({ from: connectedAccount }),
+    `100% refund received for ticket #${tokenId}!`, () => { loadUserInventory(); updateTreasuryBalance(); });
 }
 
-// 7. Load Buyer Inventory
 async function loadUserInventory() {
-  const container = document.getElementById("inventoryContainer");
-  if (!container || !contract || !connectedAccount) return;
-
-  container.innerHTML = "Fetching your tickets...";
+  const box = $("inventoryContainer");
+  if (!box || !contract || !connectedAccount) return;
+  box.innerHTML = "Fetching your tickets...";
 
   try {
-    const userTokenIds = await contract.methods.getUserTickets(connectedAccount).call();
-    const uniqueIds = [...new Set(userTokenIds.map(Number))];
+    const totalTokens = Number(await contract.methods.tokenCount().call());
+    const me = connectedAccount.toLowerCase();
+    const now = nowSec();
+    let html = "", count = 0;
 
-    if (uniqueIds.length === 0) {
-      container.innerHTML = "<p>You do not own any tickets yet.</p>";
-      return;
-    }
-
-    let html = "";
-    let count = 0;
-
-    for (let tid of uniqueIds) {
-      const t = await contract.methods.tickets(tid).call();
-      const listingId = t.listingId !== undefined ? t.listingId : t[1];
-      const owner = (t.owner !== undefined ? t.owner : t[2]).toLowerCase();
-      const isResold = t.isResold !== undefined ? t.isResold : t[3];
-      const claimed = t.claimed !== undefined ? t.claimed : t[4];
-
-      if (owner === connectedAccount.toLowerCase() && !isResold) {
+    for (let tid = 1; tid <= totalTokens; tid++) {
+      try {
+        const t = readTicket(await contract.methods.tickets(tid).call());
+        if (t.owner !== me || t.isResold) continue;
         count++;
 
-        const listing = await contract.methods.listings(listingId).call();
-        const eventName = listing.name !== undefined ? listing.name : listing[1];
-        const isEventCancelled = listing.isCancelled !== undefined ? Boolean(listing.isCancelled) : Boolean(listing[7]);
+        const l = readListing(await contract.methods.listings(t.listingId).call());
+        const started = now >= l.eventTime;
 
-        let statusText = "<span style='color:green;'>Valid</span>";
-        if (claimed) {
-          statusText = "<span style='color:gray;'>Claimed / Used</span>";
-        } else if (isEventCancelled) {
-          statusText = "<span style='color:red;'>Event Cancelled</span>";
+        let status = "<span style='color:green;'>Valid</span>";
+        if (t.claimed) status = "<span style='color:gray;'>Used</span>";
+        else if (l.cancelled) status = "<span style='color:red;'>Event Cancelled</span>";
+
+        let buttons = "";
+        if (!t.claimed && l.cancelled) {
+          buttons = `<button class="btn" style="background:#e74c3c;" onclick="claimFullRefund(${tid})">Claim 100% Full Refund</button>`;
+        } else if (!t.claimed) {
+          if (!started) buttons += `<button class="btn" style="background:#e67e22; margin-bottom: 6px;" onclick="initiateResale(${tid})">Refund & Resell (-10%)</button>`;
+          buttons += `<button class="btn" style="background:#27ae60;" onclick="openEntryPass(${tid})">Show Entry Pass (Signature)</button>`;
         }
 
         html += `
-          <div class="card" style="border: 1px solid ${isEventCancelled ? '#e74c3c' : '#27ae60'}; margin-bottom: 10px; padding: 12px; border-radius: 6px;">
-            <h4>🎟️ ${eventName || "Ticket Pass"} #${tid}</h4>
-            <p><strong>Associated Listing:</strong> #${listingId}</p>
-            <p><strong>Status:</strong> ${statusText}</p>
-            ${!claimed && isEventCancelled ? `
-              <button class="btn" style="background:#e74c3c;" onclick="claimFullRefund(${tid})">
-                Claim 100% Full Refund
-              </button>
-            ` : (!claimed ? `
-              <button class="btn" style="background:#e67e22; margin-bottom: 6px;" onclick="initiateResale(${tid})">Refund & Resell (-10%)</button>
-              <button class="btn" style="background:#27ae60;" onclick="openEntryPass(${tid})">Show Entry Pass (OTP)</button>
-            ` : "")}
-          </div>
-        `;
+          <div class="card" style="border: 1px solid ${l.cancelled ? '#e74c3c' : '#27ae60'}; margin-bottom: 10px; padding: 12px; border-radius: 6px;">
+            <h4>🎟️ ${esc(l.name || "Ticket Pass")} #${tid}</h4>
+            <p><strong>Listing:</strong> #${t.listingId}</p>
+            <p><strong>Event starts:</strong> ${when(l.eventTime)}</p>
+            <p><strong>Status:</strong> ${status}</p>
+            ${buttons}
+          </div>`;
+      } catch (err) {
+        console.error(`Error reading token #${tid}:`, err);
       }
     }
-
-    container.innerHTML = count > 0 ? html : "<p>You do not own any tickets yet.</p>";
+    box.innerHTML = count > 0 ? html : "<p>You do not own any tickets yet.</p>";
   } catch (error) {
     console.error("Inventory error:", error);
-    container.innerHTML = `<p style='color:red;'>Failed to load inventory: ${error.message || error}</p>`;
+    box.innerHTML = `<p style='color:red;'>Failed to load inventory: ${esc(errMsg(error))}</p>`;
   }
 }
 
-// 8. Resale Refund (10% Cut)
-async function initiateResale(tokenId) {
-  if (!confirm(`Refund Ticket #${tokenId}? You will receive 90% of the price back.`)) return;
-
-  try {
-    document.getElementById("status").innerHTML = "Processing resale refund...";
-    await contract.methods.resellRefund(tokenId).send({
-      from: connectedAccount,
-      gas: 300000
-    });
-
-    alert(`Ticket #${tokenId} refunded and moved to secondary market!`);
-    document.getElementById("status").innerHTML = "Ready";
-    loadUserInventory();
-    loadResellListings();
-    updateTreasuryBalance();
-  } catch (error) {
-    console.error("Resale refund failed:", error);
-    alert("Refund failed: " + (error.reason || error.message || error));
-  }
+// ---------- 6. resale ----------
+function initiateResale(tokenId) {
+  if (!confirm(`Refund ticket #${tokenId}? You will receive 90% of the price back.`)) return;
+  run("Processing resale refund",
+    () => contract.methods.resellRefund(tokenId).send({ from: connectedAccount }),
+    `Ticket #${tokenId} refunded and moved to the resale pool.`,
+    () => { loadUserInventory(); loadResellListings(); updateTreasuryBalance(); });
 }
 
-// 9. Load Resale Market
 async function loadResellListings() {
-  const container = document.getElementById("resellContainer");
-  if (!container || !contract) return;
+  const box = $("resellContainer");
+  if (!box || !contract) return;
 
   try {
     const total = Number(await contract.methods.tokenCount().call());
-    let html = "";
-    let count = 0;
+    const now = nowSec();
+    let html = "", count = 0;
 
     for (let tid = 1; tid <= total; tid++) {
       try {
-        const t = await contract.methods.tickets(tid).call();
-        const listingId = t.listingId !== undefined ? t.listingId : t[1];
-        const isResold = t.isResold !== undefined ? t.isResold : t[3];
-        const claimed = t.claimed !== undefined ? t.claimed : t[4];
+        const t = readTicket(await contract.methods.tickets(tid).call());
+        if (!t.isResold || t.claimed) continue;
 
-        if (isResold && !claimed) {
-          const originalListing = await contract.methods.listings(listingId).call();
-          const eventName = originalListing.name !== undefined ? originalListing.name : originalListing[1];
-          const isCancelled = originalListing.isCancelled !== undefined ? Boolean(originalListing.isCancelled) : Boolean(originalListing[7]);
+        const l = readListing(await contract.methods.listings(t.listingId).call());
+        if (l.cancelled || now >= l.eventTime) continue;
 
-          if (isCancelled) continue;
-
-          count++;
-          const priceWei = originalListing.price !== undefined ? originalListing.price : originalListing[2];
-          const priceEth = web3.utils.fromWei(priceWei.toString(), "ether");
-
-          html += `
-            <div class="card" style="border: 1px solid #f39c12; margin-bottom: 10px; padding: 12px; border-radius: 6px;">
-              <h4>Resale: ${eventName || "Ticket"} #${tid}</h4>
-              <p><strong>Original Listing:</strong> #${listingId}</p>
-              <p><strong>Price:</strong> ${priceEth} ETH</p>
-              <button class="btn" style="background:#f39c12;" onclick="buyResellTicketDirect(${tid}, '${priceWei.toString()}')">
-                Buy Resale Ticket #${tid}
-              </button>
-            </div>
-          `;
-        }
+        count++;
+        html += `
+          <div class="card" style="border: 1px solid #f39c12; margin-bottom: 10px; padding: 12px; border-radius: 6px;">
+            <h4>Resale: ${esc(l.name || "Ticket")} #${tid}</h4>
+            <p><strong>Original listing:</strong> #${t.listingId}</p>
+            <p><strong>Price:</strong> ${ethOf(l.priceWei)} ETH (face value)</p>
+            <button class="btn" style="background:#f39c12;" onclick="buyResellTicketDirect(${tid}, '${l.priceWei.toString()}')">Buy Resale Ticket #${tid}</button>
+          </div>`;
       } catch (err) {
         console.error(`Error loading resale ticket #${tid}:`, err);
       }
     }
-
-    container.innerHTML = count > 0 ? html : "<p>No resold tickets currently available.</p>";
+    box.innerHTML = count > 0 ? html : "<p>No resold tickets currently available.</p>";
   } catch (error) {
     console.error("Resale market error:", error);
   }
 }
 
-// 10. Buy Resale Ticket
-async function buyResellTicketDirect(tokenId, priceWei) {
-  if (!web3 || !connectedAccount) return alert("Please connect your wallet first!");
-
-  try {
-    document.getElementById("status").innerHTML = `Purchasing Resale Ticket #${tokenId}...`;
-
-    await contract.methods.buyResellTicket(tokenId).send({
-      from: connectedAccount,
-      value: priceWei,
-      gas: 350000
-    });
-
-    alert(`Successfully acquired Ticket #${tokenId} from resale!`);
-    document.getElementById("status").innerHTML = "Ready";
-    loadResellListings();
-    loadUserInventory();
-    updateTreasuryBalance();
-  } catch (error) {
-    console.error("Resale purchase error:", error);
-    alert("Purchase failed: " + (error.reason || error.message || error));
-  }
+function buyResellTicketDirect(tokenId, priceWei) {
+  run(`Buying resale ticket #${tokenId}`,
+    () => contract.methods.buyResellTicket(tokenId).send({ from: connectedAccount, value: priceWei }),
+    `Ticket #${tokenId} acquired from the resale pool!`,
+    () => { loadResellListings(); loadUserInventory(); updateTreasuryBalance(); });
 }
 
-// 11. OTP Session
-let otpInterval = null;
+// ---------- 7. wallet-signature entry pass ----------
+// The signed message is bound to this contract, this chain, this ticket and a short time window.
+async function passMessage(tokenId, windowIdx) {
+  const chainId = (await web3.eth.getChainId()).toString();
+  return `BlockPass entry pass | contract ${contractAddress.toLowerCase()} | chain ${chainId} | ticket #${tokenId} | window ${windowIdx}`;
+}
+const currentWindow = () => Math.floor(nowSec() / PASS_WINDOW);
 
 function openEntryPass(tokenId) {
-  document.getElementById("modalTokenText").innerText = `Ticket #${tokenId}`;
-  document.getElementById("otpModal").style.display = "flex";
-  refreshOtp(tokenId);
-
-  if (otpInterval) clearInterval(otpInterval);
-  otpInterval = setInterval(() => refreshOtp(tokenId), 1000);
-}
-
-function refreshOtp(tokenId) {
-  const now = Math.floor(Date.now() / 1000);
-  const windowPeriod = 30;
-  const timeSlice = Math.floor(now / windowPeriod);
-  const timeLeft = windowPeriod - (now % windowPeriod);
-
-  const rawVal = Math.abs(Math.sin(Number(tokenId) * 1000 + timeSlice) * 1000000);
-  const otp = Math.floor(rawVal).toString().padStart(6, '0');
-
-  document.getElementById("otpDisplay").innerText = otp;
-  document.getElementById("otpTimer").innerText = timeLeft;
+  activeTokenIdForSigning = tokenId;
+  $("modalTokenText").innerText = `Ticket #${tokenId}`;
+  $("signatureOutput").innerText = "";
+  $("otpModal").style.display = "flex";
 }
 
 function closeOtpModal() {
-  document.getElementById("otpModal").style.display = "none";
-  if (otpInterval) clearInterval(otpInterval);
+  $("otpModal").style.display = "none";
+  activeTokenIdForSigning = null;
 }
 
-function verifyOtpLocally(tokenId, otpToCheck) {
-  const now = Math.floor(Date.now() / 1000);
-  const windowPeriod = 30;
-  for (let i = -1; i <= 1; i++) {
-    const timeSlice = Math.floor(now / windowPeriod) + i;
-    const rawVal = Math.abs(Math.sin(Number(tokenId) * 1000 + timeSlice) * 1000000);
-    const validOtp = Math.floor(rawVal).toString().padStart(6, '0');
-    if (validOtp === otpToCheck) return true;
+async function signEntryPass() {
+  if (!web3 || !connectedAccount || activeTokenIdForSigning == null) return alert("Wallet not connected or ticket not selected.");
+  try {
+    setStatus("Requesting signature in MetaMask...");
+    const message = await passMessage(activeTokenIdForSigning, currentWindow());
+    const signature = await window.ethereum.request({
+      method: "personal_sign",
+      params: [web3.utils.utf8ToHex(message), connectedAccount]
+    });
+    $("signatureOutput").innerText = signature;
+    alert("Pass signed! Show or send this signature to gate staff within 2 minutes.");
+  } catch (error) {
+    console.error("Signing failed:", error);
+    alert("Signing cancelled or failed.");
+  } finally {
+    idle();
   }
-  return false;
 }
 
-// 12. Account Switch & Reload Listeners
+async function copySignature() {
+  const sig = $("signatureOutput").innerText;
+  if (!sig) return alert("Sign the pass first.");
+  try {
+    await navigator.clipboard.writeText(sig);
+    alert("Signature copied.");
+  } catch (e) {
+    alert("Copy failed. Select the text manually.");
+  }
+}
+
+// ---------- 8. wallet listeners ----------
 if (window.ethereum) {
-  window.ethereum.on('accountsChanged', async (accounts) => {
+  window.ethereum.on("accountsChanged", async accounts => {
     if (!accounts || accounts.length === 0) {
       connectedAccount = null;
-      document.getElementById("status").innerHTML = "DISCONNECTED";
-      document.getElementById("buyerPanel").style.display = "none";
-      document.getElementById("sellerPanel").style.display = "none";
+      isAdminAccount = false;
+      setStatus("DISCONNECTED");
+      showPanels(false, false);
     } else {
       await initAccount();
     }
   });
-
-  window.ethereum.on('chainChanged', () => {
-    window.location.reload();
-  });
+  window.ethereum.on("chainChanged", () => window.location.reload());
 }
 
-window.addEventListener('load', async () => {
+window.addEventListener("load", async () => {
   if (typeof window.ethereum !== "undefined") {
     web3 = new Web3(window.ethereum);
     await initAccount();
   }
 
-  const verifyBtn = document.getElementById('verifyTicketBtn');
-  if (verifyBtn) {
-    verifyBtn.addEventListener('click', async () => {
-      const tokenId = document.getElementById('scanTokenId').value;
-      const enteredOtp = document.getElementById('scanOtp').value;
-      const statusBox = document.getElementById('scanStatus');
-      const statusText = document.getElementById('statusText');
+  const verifyBtn = $("verifyTicketBtn");
+  if (!verifyBtn) return;
 
-      statusBox.classList.remove('hidden', 'status-success', 'status-error');
+  verifyBtn.addEventListener("click", async () => {
+    const tokenId = $("scanTokenId").value;
+    const signature = $("scanSignature").value.trim();
+    const box = $("scanStatus");
+    const text = $("statusText");
 
-      if (!tokenId || !enteredOtp) {
-        statusBox.classList.add('status-error');
-        statusText.innerText = "ERROR: Fill in all fields!";
-        return;
+    const show = (ok, msg) => {
+      box.classList.remove("hidden", "status-success", "status-error");
+      box.classList.add(ok ? "status-success" : "status-error");
+      text.innerText = msg;
+    };
+
+    if (!tokenId || !signature) return show(false, "ERROR: Fill in all fields!");
+    if (!connectedAccount || !contract) return show(false, "ERROR: Connect MetaMask first!");
+    if (!isAdminAccount) return show(false, "ERROR: Only the admin (gate) wallet can scan tickets.");
+
+    try {
+      show(true, "VERIFYING SIGNATURE...");
+      const t = readTicket(await contract.methods.tickets(tokenId).call());
+
+      if (t.owner === ZERO) return show(false, "ACCESS DENIED: Ticket does not exist or was refunded.");
+      if (t.claimed) return show(false, "ACCESS DENIED: Ticket already used.");
+      if (t.isResold) return show(false, "ACCESS DENIED: Ticket was refunded and is in the resale pool.");
+
+      let valid = false;
+      for (const w of [currentWindow(), currentWindow() - 1]) {
+        try {
+          const signer = web3.eth.accounts.recover(await passMessage(tokenId, w), signature);
+          if (signer.toLowerCase() === t.owner) { valid = true; break; }
+        } catch (e) { /* malformed signature: treated as invalid */ }
       }
+      if (!valid) return show(false, "ACCESS DENIED: Invalid, expired or wrong-ticket signature.");
 
-      if (!connectedAccount) {
-        statusBox.classList.add('status-error');
-        statusText.innerText = "ERROR: Connect MetaMask first!";
-        return;
-      }
-
-      if (!verifyOtpLocally(tokenId, enteredOtp)) {
-        statusBox.classList.add('status-error');
-        statusText.innerText = `ACCESS DENIED: Invalid or Expired OTP!`;
-        return;
-      }
-
-      try {
-        statusText.innerText = "VERIFYING ON-CHAIN...";
-        await contract.methods.claimTicket(tokenId).send({ from: connectedAccount });
-
-        statusBox.classList.add('status-success');
-        statusText.innerText = `ACCESS GRANTED // Ticket #${tokenId} Verified`;
-      } catch (error) {
-        statusBox.classList.add('status-error');
-        statusText.innerText = `ACCESS DENIED: Already used or invalid.`;
-        console.error(error);
-      }
-    });
-  }
+      show(true, "SIGNATURE VALID. CLAIMING ON-CHAIN...");
+      await contract.methods.claimTicket(tokenId).send({ from: connectedAccount });
+      show(true, `ACCESS GRANTED // Ticket #${tokenId} verified and marked used`);
+    } catch (error) {
+      console.error(error);
+      show(false, `ACCESS DENIED: ${errMsg(error)}`);
+    }
+  });
 });

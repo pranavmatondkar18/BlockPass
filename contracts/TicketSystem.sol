@@ -8,9 +8,11 @@ contract TicketSystem {
         uint256 price;
         uint256 supply;
         uint256 soldCount;
-        uint256 liveTime;
+        uint256 liveTime;     // sale start
         bool active;
         bool isCancelled;
+        uint256 eventTime;    // event start: sales, resale and refunds close here
+        uint256 heldCount;    // tickets currently held by users (refundable liability)
     }
 
     struct Ticket {
@@ -21,19 +23,22 @@ contract TicketSystem {
         bool claimed;
     }
 
+    uint256 public constant MAX_PER_WALLET = 4;
+    uint256 public constant RESALE_REFUND_PCT = 90;
+
     address public admin;
     uint256 public listingCount;
     uint256 public tokenCount;
 
-    // Escrow tracking to protect refund funds
+    // ETH reserved for 100% refunds on cancelled events
     uint256 public lockedRefundEscrow;
 
-    // Reentrancy lock
     bool private _locked;
 
     mapping(uint256 => Listing) public listings;
     mapping(uint256 => Ticket) public tickets;
     mapping(address => uint256[]) public userTickets;
+    mapping(uint256 => mapping(address => uint256)) private purchased; // listingId => wallet => tickets held
 
     event ListingCreated(uint256 indexed listingId, string name, uint256 price, uint256 supply, uint256 liveTime);
     event ListingCancelled(uint256 indexed listingId);
@@ -58,8 +63,21 @@ contract TicketSystem {
         admin = msg.sender;
     }
 
-    function createListing(string memory name, uint256 price, uint256 supply, uint256 liveTime) public onlyAdmin {
+    function _resaleRefund(uint256 price) private pure returns (uint256) {
+        return (price * RESALE_REFUND_PCT) / 100;
+    }
+
+    function createListing(
+        string memory name,
+        uint256 price,
+        uint256 supply,
+        uint256 liveTime,
+        uint256 eventTime
+    ) public onlyAdmin {
         require(bytes(name).length > 0, "Event name cannot be empty");
+        require(price > 0 && supply > 0, "Price and supply must be positive");
+        require(eventTime > liveTime && eventTime > block.timestamp, "Event must start after sale start");
+
         listingCount++;
         listings[listingCount] = Listing({
             id: listingCount,
@@ -69,7 +87,9 @@ contract TicketSystem {
             soldCount: 0,
             liveTime: liveTime,
             active: true,
-            isCancelled: false
+            isCancelled: false,
+            eventTime: eventTime,
+            heldCount: 0
         });
         emit ListingCreated(listingCount, name, price, supply, liveTime);
     }
@@ -77,12 +97,13 @@ contract TicketSystem {
     function cancelListing(uint256 listingId) public onlyAdmin {
         Listing storage listing = listings[listingId];
         require(listing.active, "Listing already inactive or cancelled");
-        
+        require(block.timestamp < listing.eventTime, "Event already started");
+
         listing.active = false;
         listing.isCancelled = true;
 
-        // Reserve 100% refund for all sold tickets
-        lockedRefundEscrow += (listing.price * listing.soldCount);
+        // Reserve 100% only for tickets users still hold (not used, not already refunded)
+        lockedRefundEscrow += listing.price * listing.heldCount;
 
         emit ListingCancelled(listingId);
     }
@@ -92,10 +113,14 @@ contract TicketSystem {
         require(listing.active, "Listing is not active");
         require(!listing.isCancelled, "Listing is cancelled");
         require(block.timestamp >= listing.liveTime, "Listing is not live yet");
+        require(block.timestamp < listing.eventTime, "Event already started");
         require(listing.soldCount < listing.supply, "Sold out!");
-        require(msg.value == listing.price, "Incorrect ETH/MATIC amount sent");
+        require(purchased[listingId][msg.sender] < MAX_PER_WALLET, "Per-wallet ticket limit reached");
+        require(msg.value == listing.price, "Incorrect ETH amount sent");
 
         listing.soldCount++;
+        listing.heldCount++;
+        purchased[listingId][msg.sender]++;
         tokenCount++;
 
         tickets[tokenCount] = Ticket({
@@ -122,10 +147,8 @@ contract TicketSystem {
 
         ticket.owner = address(0);
         ticket.claimed = true;
-
-        if (lockedRefundEscrow >= fullRefund) {
-            lockedRefundEscrow -= fullRefund;
-        }
+        listing.heldCount--;
+        lockedRefundEscrow -= fullRefund;
 
         (bool sent, ) = payable(msg.sender).call{value: fullRefund}("");
         require(sent, "ETH refund transfer failed");
@@ -141,15 +164,18 @@ contract TicketSystem {
 
         Listing storage listing = listings[ticket.listingId];
         require(!listing.isCancelled, "Event cancelled: use claimCancelledRefund instead");
-        
-        uint256 refundAmount = (listing.price * 90) / 100;
-        
+        require(block.timestamp < listing.eventTime, "Refunds closed: event started");
+
+        uint256 refundAmount = _resaleRefund(listing.price);
+
         ticket.isResold = true;
         ticket.owner = address(this);
+        listing.heldCount--;
+        purchased[ticket.listingId][msg.sender]--;
 
         (bool sent, ) = payable(msg.sender).call{value: refundAmount}("");
         require(sent, "ETH transfer failed");
-        
+
         emit TicketRefunded(tokenId, msg.sender, refundAmount);
     }
 
@@ -160,30 +186,53 @@ contract TicketSystem {
 
         Listing storage listing = listings[ticket.listingId];
         require(!listing.isCancelled, "Event cancelled");
-        require(msg.value == listing.price, "Incorrect ETH/MATIC amount sent");
+        require(block.timestamp < listing.eventTime, "Event already started");
+        require(purchased[ticket.listingId][msg.sender] < MAX_PER_WALLET, "Per-wallet ticket limit reached");
+        require(msg.value == listing.price, "Incorrect ETH amount sent");
 
         ticket.owner = msg.sender;
         ticket.isResold = false;
+        listing.heldCount++;
+        purchased[ticket.listingId][msg.sender]++;
 
         userTickets[msg.sender].push(tokenId);
         emit TicketPurchased(tokenId, ticket.listingId, msg.sender);
     }
 
+    // Marks a ticket as used at the gate. The signature check happens in the gate app;
+    // this call is restricted to the ticket owner or the admin (gate) wallet.
     function claimTicket(uint256 tokenId) public {
         Ticket storage ticket = tickets[tokenId];
+        require(ticket.owner != address(0), "Ticket does not exist");
+        require(!ticket.isResold, "Ticket is in the resale pool");
         require(ticket.owner == msg.sender || msg.sender == admin, "Not authorized to verify");
         require(!ticket.claimed, "Ticket already used/claimed");
 
+        Listing storage listing = listings[ticket.listingId];
+        require(!listing.isCancelled, "Event cancelled");
+
         ticket.claimed = true;
+        listing.heldCount--; // used tickets are no longer refundable
         emit TicketClaimed(tokenId);
     }
 
-    // Allows withdrawing surplus profits to admin while protecting active refund escrow
+    // Withdraws only surplus: balance minus cancelled-event escrow minus the 90% refund
+    // liability of tickets that can still be refunded (event not started). The loop runs
+    // over listings (admin-created), not over tickets, so gas does not grow with sales.
     function withdraw() public onlyAdmin nonReentrant {
-        uint256 contractBalance = address(this).balance;
-        require(contractBalance > lockedRefundEscrow, "No surplus funds to withdraw");
+        uint256 activeLiability = 0;
+        for (uint256 i = 1; i <= listingCount; i++) {
+            Listing storage l = listings[i];
+            if (!l.isCancelled && block.timestamp < l.eventTime) {
+                activeLiability += _resaleRefund(l.price) * l.heldCount;
+            }
+        }
 
-        uint256 withdrawableAmount = contractBalance - lockedRefundEscrow;
+        uint256 totalLocked = lockedRefundEscrow + activeLiability;
+        uint256 contractBalance = address(this).balance;
+        require(contractBalance > totalLocked, "No surplus funds to withdraw");
+
+        uint256 withdrawableAmount = contractBalance - totalLocked;
 
         (bool sent, ) = payable(admin).call{value: withdrawableAmount}("");
         require(sent, "ETH transfer failed");

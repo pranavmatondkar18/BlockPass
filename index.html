@@ -3,189 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>BlockPass // Secure Cryptographic Ticketing dApp</title>
+    <title>BlockPass // Secure Decentralized Ticketing dApp</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg-color: #0b0f19;
-            --card-bg: rgba(18, 22, 32, 0.75);
-            --border-color: rgba(0, 240, 255, 0.15);
-            --border-glow: rgba(0, 240, 255, 0.4);
-            --accent-cyan: #00f0ff;
-            --accent-green: #00ff66;
-            --accent-amber: #f39c12;
-            --accent-red: #e74c3c;
-            --text-main: #e2e8f0;
-            --text-muted: #94a3b8;
+            --bg-color: #0b0f19; --card-bg: rgba(18, 22, 32, 0.75);
+            --border-color: rgba(0, 240, 255, 0.15); --border-glow: rgba(0, 240, 255, 0.4);
+            --accent-cyan: #00f0ff; --accent-green: #00ff66; --accent-amber: #f39c12; --accent-red: #e74c3c;
+            --text-main: #e2e8f0; --text-muted: #94a3b8;
         }
-
         body {
-            font-family: 'Inter', sans-serif;
-            background-color: var(--bg-color);
-            background-image: 
-                radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.03) 0%, transparent 40%),
-                radial-gradient(circle at 90% 80%, rgba(0, 255, 102, 0.03) 0%, transparent 40%);
-            color: var(--text-main);
-            max-width: 700px;
-            margin: 30px auto;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-            border: 1px solid var(--border-color);
+            font-family: 'Inter', sans-serif; background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 10% 20%, rgba(0, 240, 255, 0.03) 0%, transparent 40%), radial-gradient(circle at 90% 80%, rgba(0, 255, 102, 0.03) 0%, transparent 40%);
+            color: var(--text-main); max-width: 700px; margin: 30px auto; padding: 20px;
+            border-radius: 12px; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5); border: 1px solid var(--border-color);
         }
-
-        h1 { 
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--accent-cyan); 
-            text-align: center; 
-            margin-bottom: 4px;
-            letter-spacing: 1px;
-            text-shadow: 0 0 10px rgba(0, 240, 255, 0.3);
-        }
-
-        p.subtitle { 
-            font-family: 'JetBrains Mono', monospace;
-            text-align: center; 
-            color: var(--text-muted); 
-            margin-bottom: 25px; 
-            font-size: 13px;
-            letter-spacing: 0.5px;
-        }
-
-        .card {
-            background: var(--card-bg);
-            backdrop-filter: blur(10px);
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-            border: 1px solid var(--border-color);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-            transition: border-color 0.3s ease;
-        }
-
-        .card:hover {
-            border-color: var(--border-glow);
-        }
-
-        h3 {
-            font-family: 'JetBrains Mono', monospace;
-            color: var(--text-main);
-            margin-top: 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-            padding-bottom: 8px;
-            font-size: 16px;
-        }
-
+        h1 { font-family: 'JetBrains Mono', monospace; color: var(--accent-cyan); text-align: center; margin-bottom: 4px; letter-spacing: 1px; text-shadow: 0 0 10px rgba(0, 240, 255, 0.3); }
+        p.subtitle { font-family: 'JetBrains Mono', monospace; text-align: center; color: var(--text-muted); margin-bottom: 25px; font-size: 13px; letter-spacing: 0.5px; }
+        .card { background: var(--card-bg); backdrop-filter: blur(10px); padding: 20px; border-radius: 10px; margin-bottom: 20px; border: 1px solid var(--border-color); box-shadow: 0 4px 20px rgba(0,0,0,0.2); transition: border-color 0.3s ease; }
+        .card:hover { border-color: var(--border-glow); }
+        h3 { font-family: 'JetBrains Mono', monospace; color: var(--text-main); margin-top: 0; border-bottom: 1px solid rgba(255, 255, 255, 0.05); padding-bottom: 8px; font-size: 16px; }
         button, .btn {
-            font-family: 'JetBrains Mono', monospace;
-            background: linear-gradient(135deg, #00f0ff 0%, #0077ff 100%);
-            color: #0b0f19;
-            font-weight: 700;
-            border: none;
-            padding: 11px 15px;
-            font-size: 14px;
-            border-radius: 6px;
-            cursor: pointer;
-            width: 100%;
-            margin-top: 10px;
-            transition: all 0.2s ease;
-            box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
+            font-family: 'JetBrains Mono', monospace; background: linear-gradient(135deg, #00f0ff 0%, #0077ff 100%); color: #0b0f19;
+            font-weight: 700; border: none; padding: 11px 15px; font-size: 14px; border-radius: 6px; cursor: pointer;
+            width: 100%; margin-top: 10px; transition: all 0.2s ease; box-shadow: 0 0 15px rgba(0, 240, 255, 0.2);
         }
-
-        button:hover, .btn:hover { 
-            opacity: 0.9;
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
-            transform: translateY(-1px);
-        }
-
-        button:disabled, .btn:disabled { 
-            background: #1e293b; 
-            color: #64748b; 
-            cursor: not-allowed; 
-            box-shadow: none;
-            transform: none;
-        }
-
+        button:hover, .btn:hover { opacity: 0.9; box-shadow: 0 0 20px rgba(0, 240, 255, 0.4); transform: translateY(-1px); }
+        button:disabled, .btn:disabled { background: #1e293b; color: #64748b; cursor: not-allowed; box-shadow: none; transform: none; }
         input {
-            font-family: 'JetBrains Mono', monospace;
-            width: 100%;
-            padding: 10px;
-            margin-top: 6px;
-            margin-bottom: 14px;
-            background: #05070c;
-            border: 1px solid #1e293b;
-            color: var(--accent-cyan);
-            border-radius: 6px;
-            box-sizing: border-box;
-            outline: none;
-            transition: border-color 0.2s;
+            font-family: 'JetBrains Mono', monospace; width: 100%; padding: 10px; margin-top: 6px; margin-bottom: 14px;
+            background: #05070c; border: 1px solid #1e293b; color: var(--accent-cyan); border-radius: 6px;
+            box-sizing: border-box; outline: none; transition: border-color 0.2s; color-scheme: dark;
         }
-
-        input:focus {
-            border-color: var(--accent-cyan);
-            box-shadow: 0 0 8px rgba(0, 240, 255, 0.2);
-        }
-
-        label { 
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            color: var(--text-muted); 
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        #status { 
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: bold; 
-            color: var(--accent-amber); 
-            word-break: break-all; 
-        }
-
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(11, 15, 25, 0.85);
-            backdrop-filter: blur(5px);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .modal-content {
-            background: #121620;
-            border: 1px solid var(--accent-green);
-            box-shadow: 0 0 30px rgba(0, 255, 102, 0.2);
-            padding: 30px;
-            border-radius: 12px;
-            text-align: center;
-            max-width: 340px;
-            margin: auto;
-        }
-
-        .modal-content h3 {
-            color: var(--accent-green);
-            border: none;
-        }
-
+        input:focus { border-color: var(--accent-cyan); box-shadow: 0 0 8px rgba(0, 240, 255, 0.2); }
+        label { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        #status { font-family: 'JetBrains Mono', monospace; font-weight: bold; color: var(--accent-amber); word-break: break-all; }
+        .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(11, 15, 25, 0.85); backdrop-filter: blur(5px); justify-content: center; align-items: center; z-index: 1000; }
+        .modal-content { background: #121620; border: 1px solid var(--accent-green); box-shadow: 0 0 30px rgba(0, 255, 102, 0.2); padding: 30px; border-radius: 12px; text-align: center; max-width: 380px; margin: auto; }
+        .modal-content h3 { color: var(--accent-green); border: none; }
         .hidden { display: none; }
-        .status-box {
-            padding: 10px;
-            margin-top: 10px;
-            border-radius: 6px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 13px;
-        }
-        .status-success {
-            background: rgba(0, 255, 102, 0.15);
-            border: 1px solid var(--accent-green);
-            color: var(--accent-green);
-        }
-        .status-error {
-            background: rgba(231, 76, 60, 0.15);
-            border: 1px solid var(--accent-red);
-            color: var(--accent-red);
-        }
+        .status-box { padding: 10px; margin-top: 10px; border-radius: 6px; font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+        .status-success { background: rgba(0, 255, 102, 0.15); border: 1px solid var(--accent-green); color: var(--accent-green); }
+        .status-error { background: rgba(231, 76, 60, 0.15); border: 1px solid var(--accent-red); color: var(--accent-red); }
+        .hint { font-size: 12px; color: var(--text-muted); }
     </style>
 </head>
 <body>
@@ -193,44 +53,41 @@
     <h1>BLOCKPASS // PROTOCOL</h1>
     <p class="subtitle">&gt;&gt; SECURE DECENTRALIZED ANTI-SCALPING TICKETING LAYER</p>
 
-    <!-- Wallet Connection Section -->
+    <!-- Wallet Connection -->
     <div class="card">
         <h3>SYS_NODE_STATUS</h3>
         <p>Connected Wallet: <span id="status">UNAUTHENTICATED</span></p>
         <button id="connectBtn" onclick="connectWallet()">Connect MetaMask</button>
     </div>
 
-    <!-- BUYER Section -->
+    <!-- BUYER -->
     <div id="buyerPanel" class="card" style="display: none;">
-        <!-- INVENTORY DISPLAY -->
         <div id="inventoryPanel" class="card">
             <h3>USER_INVENTORY [SECURE]</h3>
             <button class="btn" onclick="loadUserInventory()">Refresh My Tickets</button>
             <div id="inventoryContainer" style="margin-top: 15px;">
-                <p style="color: var(--text-muted); font-family: 'JetBrains Mono'; font-size: 13px;">Awaiting node connection...</p>
+                <p class="hint">Awaiting node connection...</p>
             </div>
         </div>
 
-        <!-- RESALE MARKET -->
         <div id="resellPanel" class="card">
-            <h3>SECONDARY_MARKET [90% REFUND POOL]</h3>
-            <button id="refreshResellBtn" class="btn" onclick="loadResellListings()" style="background: linear-gradient(135deg, #f39c12 0%, #d35400 100%); color: #fff;">Scan Resale Escrow</button>
+            <h3>SECONDARY_MARKET [FACE VALUE ONLY]</h3>
+            <button id="refreshResellBtn" class="btn" onclick="loadResellListings()" style="background: linear-gradient(135deg, #f39c12 0%, #d35400 100%); color: #fff;">Scan Resale Pool</button>
             <div id="resellContainer" style="margin-top: 15px;">
-                <p style="color: var(--text-muted); font-family: 'JetBrains Mono'; font-size: 13px;">No secondary listings found.</p>
+                <p class="hint">No secondary listings found.</p>
             </div>
         </div>
-        
-        <!-- PRIMARY LISTINGS -->
+
         <div class="card">
             <h3>ACTIVE_PRIMARY_EVENTS</h3>
             <button class="btn" onclick="loadListings()">Fetch Event Registries</button>
             <div id="listingsContainer" style="margin-top: 15px;">
-                <p style="color: var(--text-muted); font-family: 'JetBrains Mono'; font-size: 13px;">Querying blockchain state...</p>
+                <p class="hint">Querying blockchain state...</p>
             </div>
         </div>
     </div>
 
-    <!-- Seller / Admin Panel -->
+    <!-- Admin -->
     <div id="sellerPanel" class="card" style="display: none;">
         <h3>ADMIN_PANEL // EVENT DEPLOYER</h3>
 
@@ -238,30 +95,31 @@
             <label for="ticketName">Event / Listing Name:</label>
             <input type="text" id="ticketName" placeholder="e.g. Neon Horizon Music Fest">
         </div>
-
         <div class="form-group">
             <label for="ticketPrice">Price (ETH):</label>
             <input type="text" id="ticketPrice" placeholder="e.g. 0.01">
         </div>
-
         <div class="form-group">
             <label for="ticketSupply">Total Supply Cap:</label>
             <input type="number" id="ticketSupply" placeholder="e.g. 100">
         </div>
-
         <div class="form-group">
-            <label for="ticketLiveTime">Sale Start Delay (Seconds from now, 0 for immediate):</label>
+            <label for="ticketLiveTime">Sale Start Delay (seconds from now, 0 for immediate):</label>
             <input type="number" id="ticketLiveTime" placeholder="e.g. 0 for live now">
+        </div>
+        <div class="form-group">
+            <label for="ticketEventTime">Event Start (refunds and sales close here):</label>
+            <input type="datetime-local" id="ticketEventTime">
         </div>
 
         <button id="createListingBtn" class="btn" onclick="createListing()" style="background: linear-gradient(135deg, #00ff66 0%, #00b347 100%); color: #0b0f19;">Deploy Listing On-Chain</button>
 
-        <!-- TREASURY WITHDRAW CARD -->
         <div class="card" style="margin-top: 20px; border-color: rgba(0, 255, 102, 0.4);">
             <h3 style="color: var(--accent-green);">TREASURY // REVENUE VAULT</h3>
             <p>Contract Balance: <span id="contractBalanceText" style="font-family: 'JetBrains Mono'; font-weight: bold; color: var(--accent-cyan);">0.00 ETH</span></p>
+            <p class="hint">Withdrawals release surplus only. Cancelled-event refunds and refundable ticket liabilities stay locked.</p>
             <button class="btn" onclick="withdrawFunds()" style="background: linear-gradient(135deg, #00ff66 0%, #00b347 100%); color: #0b0f19;">
-                Withdraw All Funds to Admin Wallet
+                Withdraw Surplus to Admin Wallet
             </button>
         </div>
 
@@ -269,38 +127,39 @@
             <h3>ADMIN_REGISTRY_MONITOR</h3>
             <button class="btn" onclick="loadListings()">Refresh Contract State</button>
             <div id="sellerListingsContainer" style="margin-top: 15px;">
-                <p style="color: var(--text-muted); font-family: 'JetBrains Mono'; font-size: 13px;">Loading system state...</p>
+                <p class="hint">Loading system state...</p>
             </div>
         </div>
     </div>
 
-    <!-- Dynamic Entry Modal (OTP / Gate Verification) -->
+    <!-- Entry Pass Modal (Wallet Signature) -->
     <div id="otpModal" class="modal">
         <div class="modal-content">
             <h3>CRYPTOGRAPHIC ACCESS PASS</h3>
-            <p id="modalTokenText" style="font-family: 'JetBrains Mono'; color: var(--text-muted);">Token #</p>
-            <h1 id="otpDisplay" style="letter-spacing: 6px; color: var(--accent-green); font-size: 42px; margin: 15px 0; font-family: 'JetBrains Mono'; text-shadow: 0 0 15px rgba(0,255,102,0.4);">------</h1>
-            <p style="font-size: 13px; color: var(--text-muted); font-family: 'JetBrains Mono';">Epoch Refresh In: <span id="otpTimer" style="color: var(--accent-cyan);">30</span>s</p>
-            <button class="btn" onclick="closeOtpModal()" style="background: #1e293b; color: var(--text-main);">Terminate Session</button>
+            <p id="modalTokenText" style="font-family: 'JetBrains Mono'; color: var(--text-muted);">Ticket #</p>
+            <p class="hint" style="margin: 12px 0;">Sign with your wallet to prove you own this ticket. The pass is valid for about 2 minutes, so sign it when you reach the gate.</p>
+            <button class="btn" onclick="signEntryPass()" style="background: linear-gradient(135deg, #00ff66 0%, #00b347 100%); color: #0b0f19;">Sign Pass with MetaMask</button>
+            <div id="signatureOutput" style="word-break: break-all; font-size: 10px; color: var(--accent-cyan); margin-top: 10px; max-height: 80px; overflow-y: auto; text-align: left; background: #05070c; padding: 6px; border-radius: 4px;"></div>
+            <button class="btn" onclick="copySignature()" style="background: #1e293b; color: var(--text-main);">Copy Signature</button>
+            <button class="btn" onclick="closeOtpModal()" style="background: #1e293b; color: var(--text-main);">Close</button>
         </div>
     </div>
 
-    <!-- GATEKEEPER CHECKPOINT SCANNER -->
+    <!-- GATEKEEPER -->
     <div class="card">
         <h3>GATEKEEPER // CHECKPOINT SCANNER</h3>
-        <p class="subtitle" style="text-align: left; margin-bottom: 10px;">Enter ticket credentials to verify entry.</p>
-        
+        <p class="subtitle" style="text-align: left; margin-bottom: 10px;">Admin wallet only. Verifies the holder's signature, then marks the ticket used on-chain.</p>
+
         <div>
             <label for="scanTokenId">Ticket Token ID:</label>
             <input type="number" id="scanTokenId" placeholder="e.g. 1, 2, 3...">
         </div>
-
         <div>
-            <label for="scanOtp">Rolling OTP:</label>
-            <input type="text" id="scanOtp" placeholder="Enter 6-digit OTP">
+            <label for="scanSignature">Wallet Signature:</label>
+            <input type="text" id="scanSignature" placeholder="Paste the holder's signature...">
         </div>
 
-        <button id="verifyTicketBtn" class="btn">VERIFY & CLAIM TICKET</button>
+        <button id="verifyTicketBtn" class="btn">VERIFY SIGNATURE & CLAIM</button>
 
         <div id="scanStatus" class="status-box hidden">
             <span id="statusText">Awaiting input...</span>
@@ -308,6 +167,6 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/web3@4.16.0/dist/web3.min.js"></script>
-    <script src="App.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
